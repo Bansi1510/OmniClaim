@@ -1,0 +1,48 @@
+services:
+  omniclaim-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: omniclaim-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: omniclaim
+    ports:
+      - "5432:5432"
+    volumes:
+      - omniclaim_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d omniclaim"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  omniclaim-redis:
+    image: redis:7-alpine
+    container_name: omniclaim-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - omniclaim_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  omniclaim-localstack:
+    image: localstack/localstack:latest
+    container_name: omniclaim-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+    volumes:
+      - omniclaim_localstack:/var/lib/localstack
+
+volumes:
+  omniclaim_pgdata:
+  omniclaim_redisdata:
+  omniclaim_localstack:
