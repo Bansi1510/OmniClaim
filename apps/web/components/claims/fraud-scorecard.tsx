@@ -3,6 +3,8 @@
 import React from 'react';
 import { FraudScorecardDto } from '@omniclaim/shared-types';
 import { FRAUD_RISK_THEME } from '@/lib/theme-constants';
+import { Can } from '@/components/auth/can';
+import { Lock } from 'lucide-react';
 
 interface FraudScorecardProps {
   scorecard: FraudScorecardDto;
@@ -78,12 +80,22 @@ export function FraudScorecardView({ scorecard, onOverrideIndicator }: FraudScor
                 </p>
               </div>
               {!ind.isOverridden && onOverrideIndicator && (
-                <button
-                  onClick={() => onOverrideIndicator(ind.type)}
-                  className="rounded border border-border bg-secondary px-2 py-1 text-[11px] font-medium hover:bg-secondary/80 transition"
+                <Can
+                  permission="fraud:override"
+                  fallback={
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-1" title="SIU Investigator authority required to override fraud flags">
+                      <Lock className="h-3 w-3" />
+                      <span className="italic">SIU only</span>
+                    </span>
+                  }
                 >
-                  Override Flag
-                </button>
+                  <button
+                    onClick={() => onOverrideIndicator(ind.type)}
+                    className="rounded border border-border bg-secondary px-2 py-1 text-[11px] font-medium hover:bg-secondary/80 transition"
+                  >
+                    Override Flag
+                  </button>
+                </Can>
               )}
             </div>
           ))

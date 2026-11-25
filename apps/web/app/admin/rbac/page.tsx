@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Breadcrumb } from '@/components/common/breadcrumb';
 
 interface RolePermRow {
   roleId: string;
@@ -84,6 +85,10 @@ export default function DynamicRbacMatrixPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        title="Permission Matrix Grid"
+        items={[{ label: 'Setup' }, { label: 'Role & Rights', href: '/admin/roles' }, { label: 'Matrix' }]}
+      />
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Dynamic RBAC Permission Matrix</h1>

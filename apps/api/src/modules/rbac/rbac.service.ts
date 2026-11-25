@@ -8,6 +8,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateRoleDto, UpdateRoleDto, AssignPermissionsDto, AssignRolesDto } from './dto/rbac.dto';
 
+export interface MenuItem {
+  id: string;
+  title: string;
+  navLink?: string;
+  icon?: string;
+  requiredPermission?: string;
+  badgeName?: string;
+  badgeColor?: string;
+  children?: MenuItem[];
+}
+
 export interface ModulePermissionsGroup {
   module: string;
   displayName: string;
@@ -24,14 +35,160 @@ export interface ModulePermissionsGroup {
 export class RbacService {
   private readonly logger = new Logger(RbacService.name);
 
+  // Full enterprise master menu navigation tree matching college erp module_master menu
+  private readonly masterNavigationMenu: MenuItem[] = [
+    {
+      id: 'claims-management',
+      title: 'Claims Operations',
+      icon: 'FileText',
+      requiredPermission: 'claims:read',
+      children: [
+        {
+          id: 'claims-queue',
+          title: 'Triage Queue',
+          navLink: '/claims',
+          requiredPermission: 'claims:read',
+          badgeName: 'Active',
+          badgeColor: 'primary',
+        },
+        {
+          id: 'claims-intake',
+          title: 'Initiate New Claim',
+          navLink: '/claims/new',
+          requiredPermission: 'claims:create',
+        },
+      ],
+    },
+    {
+      id: 'fraud-siu',
+      title: 'Fraud & SIU Unit',
+      icon: 'ShieldAlert',
+      requiredPermission: 'fraud:read',
+      children: [
+        {
+          id: 'fraud-audits',
+          title: 'Scorecard Audits',
+          navLink: '/claims?filter=fraud',
+          requiredPermission: 'fraud:read',
+        },
+        {
+          id: 'vector-search',
+          title: 'pgvector Damage Search',
+          navLink: '/claims?filter=vector',
+          requiredPermission: 'fraud:read',
+          badgeName: 'AI',
+          badgeColor: 'teal',
+        },
+      ],
+    },
+    {
+      id: 'ledger-accounting',
+      title: 'Financial Ledger',
+      icon: 'BookOpen',
+      requiredPermission: 'ledger:read',
+      children: [
+        {
+          id: 'ledger-journals',
+          title: 'General Journals',
+          navLink: '/ledger',
+          requiredPermission: 'ledger:read',
+        },
+        {
+          id: 'ledger-vouchers',
+          title: 'Settlement Vouchers',
+          navLink: '/ledger/vouchers',
+          requiredPermission: 'ledger:read',
+        },
+      ],
+    },
+    {
+      id: 'system-setup',
+      title: 'Setup & Access Control',
+      icon: 'Settings',
+      requiredPermission: 'rbac:roles_create',
+      children: [
+        {
+          id: 'roles-rights',
+          title: 'Roles & Rights Setup',
+          navLink: '/admin/roles',
+          requiredPermission: 'rbac:roles_create',
+        },
+        {
+          id: 'matrix-overview',
+          title: 'Permission Matrix Grid',
+          navLink: '/admin/rbac',
+          requiredPermission: 'rbac:roles_create',
+        },
+        {
+          id: 'user-access',
+          title: 'User Role Assignment',
+          navLink: '/admin/users',
+          requiredPermission: 'rbac:users_assign',
+        },
+      ],
+    },
+    {
+      id: 'audit-trail',
+      title: 'Audit & Compliance',
+      icon: 'History',
+      requiredPermission: 'audit:read',
+      children: [
+        {
+          id: 'audit-logs',
+          title: 'Field Modification Logs',
+          navLink: '/audit',
+          requiredPermission: 'audit:read',
+        },
+      ],
+    },
+  ];
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
 
   /**
-   * List all roles with attached permissions and user counts.
+   * Filters and returns navigation menu items dynamically based on current user permissions.
+   * Matches college erp GET /menu endpoint!
    */
+  async getNavigationMenuForUser(userId: string): Promise<MenuItem[]> {
+    const userPermissions = await this.getUserPermissions(userId);
+    const permSet = new Set(userPermissions);
+
+    const isSuperAdmin = permSet.has('SUPER_ADMIN') || userPermissions.includes('rbac:roles_create') && userPermissions.includes('claims:settle');
+
+    const filterItem = (item: MenuItem): MenuItem | null => {
+      // 1. Check if user satisfies required permission
+      if (item.requiredPermission && !isSuperAdmin && !permSet.has(item.requiredPermission)) {
+        return null;
+      }
+
+      // 2. Filter children recursively
+      if (item.children && item.children.length > 0) {
+        const permittedChildren = item.children
+          .map(filterItem)
+          .filter((c): c is MenuItem => c !== null);
+
+        // If parent has children but user has 0 allowed children, hide parent
+        if (permittedChildren.length === 0) {
+          return null;
+        }
+
+        return {
+          ...item,
+          children: permittedChildren,
+        };
+      }
+
+      return item;
+    };
+
+    return this.masterNavigationMenu
+      .map(filterItem)
+      .filter((m): m is MenuItem => m !== null);
+  }
+
   async listRoles(search?: string) {
     const where: any = {};
     if (search) {
@@ -69,9 +226,6 @@ export class RbacService {
     }));
   }
 
-  /**
-   * Get single role details with complete permissions list.
-   */
   async getRoleById(id: string) {
     const role = await this.prisma.role.findUnique({
       where: { id },
@@ -99,9 +253,6 @@ export class RbacService {
     };
   }
 
-  /**
-   * Returns permissions grouped hierarchically by Module (matching college erp accordion format).
-   */
   async listGroupedPermissions(): Promise<ModulePermissionsGroup[]> {
     const permissions = await this.prisma.permission.findMany({
       orderBy: [{ module: 'asc' }, { slug: 'asc' }],
@@ -158,7 +309,6 @@ export class RbacService {
         });
       }
 
-      // Extract action from slug (e.g., "claims:approve" -> action "approve")
       const parts = p.slug.split(':');
       const action = parts.length > 1 ? parts[1].replace('_', ' ') : 'access';
 
@@ -173,9 +323,6 @@ export class RbacService {
     return Array.from(grouped.values());
   }
 
-  /**
-   * Create a new custom role.
-   */
   async createRole(dto: CreateRoleDto) {
     const existing = await this.prisma.role.findFirst({
       where: { OR: [{ slug: dto.slug }, { name: dto.name }] },
@@ -200,9 +347,6 @@ export class RbacService {
     return role;
   }
 
-  /**
-   * Update role details.
-   */
   async updateRole(id: string, dto: UpdateRoleDto) {
     const role = await this.prisma.role.findUnique({ where: { id } });
     if (!role) throw new NotFoundException(`Role ${id} not found.`);
@@ -219,9 +363,6 @@ export class RbacService {
     return updated;
   }
 
-  /**
-   * Delete role (system roles protected).
-   */
   async deleteRole(id: string) {
     const role = await this.prisma.role.findUnique({ where: { id } });
     if (!role) throw new NotFoundException(`Role ${id} not found.`);
@@ -234,15 +375,10 @@ export class RbacService {
     return { success: true, deletedRoleId: id };
   }
 
-  /**
-   * Assign or replace rights/permissions for a role.
-   * Matches college erp POST /permission/:roleId
-   */
   async assignPermissionsToRole(roleId: string, dto: AssignPermissionsDto) {
     const role = await this.prisma.role.findUnique({ where: { id: roleId } });
     if (!role) throw new NotFoundException(`Role ${roleId} not found.`);
 
-    // 1. Resolve permissions from slugs or ids
     const permissions = await this.prisma.permission.findMany({
       where: {
         OR: [
@@ -252,7 +388,6 @@ export class RbacService {
       },
     });
 
-    // 2. Transactionally replace permissions for this role
     await this.prisma.$transaction(async (tx) => {
       await tx.rolePermission.deleteMany({ where: { roleId } });
 
@@ -266,7 +401,6 @@ export class RbacService {
       }
     });
 
-    // 3. Invalidate Redis permissions cache for all users holding this role
     await this.redis.deletePattern('user_permissions:*');
     this.logger.log(`Permissions updated for role ${role.slug}. Permission cache invalidated.`);
 
@@ -278,9 +412,6 @@ export class RbacService {
     };
   }
 
-  /**
-   * List users with their assigned roles.
-   */
   async listUsers() {
     const users = await this.prisma.user.findMany({
       include: {
@@ -306,9 +437,6 @@ export class RbacService {
     }));
   }
 
-  /**
-   * Assign roles to a user.
-   */
   async assignRolesToUser(userId: string, dto: AssignRolesDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User ${userId} not found.`);
@@ -332,10 +460,6 @@ export class RbacService {
     return { success: true, userId, assignedRoles: dto.roleIds.length };
   }
 
-  /**
-   * Get permissions list for current user token/session.
-   * Matches college erp GET /permission
-   */
   async getUserPermissions(userId: string): Promise<string[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

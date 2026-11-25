@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { Shield, Plus, Edit2, Trash2, Search, CheckCircle2, Lock } from 'lucide-react';
+import { usePermissions } from '@/hooks/use-permissions';
+import { Can } from '@/components/auth/can';
 
 interface RoleRow {
   id: string;
@@ -64,6 +66,7 @@ const INITIAL_ROLES: RoleRow[] = [
 ];
 
 export default function RoleManagementPage() {
+  const { isSystemAdmin, hasAnyPermission } = usePermissions();
   const [roles, setRoles] = useState<RoleRow[]>(INITIAL_ROLES);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -74,6 +77,12 @@ export default function RoleManagementPage() {
   const [formSlug, setFormSlug] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const canPerformAnyAction = isSystemAdmin || hasAnyPermission([
+    'rbac:roles_assign',
+    'rbac:roles_update',
+    'rbac:roles_delete',
+  ]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -173,13 +182,17 @@ export default function RoleManagementPage() {
               <span>{toastMessage}</span>
             </div>
           )}
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-3.5 py-1.5 text-xs font-semibold shadow transition"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Role</span>
-          </button>
+
+          {/* Add Role Button - Gated by rbac:roles_create matching College ERP RoleTable.jsx */}
+          <Can permission="rbac:roles_create">
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-3.5 py-1.5 text-xs font-semibold shadow transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Role</span>
+            </button>
+          </Can>
         </div>
       </div>
 
@@ -193,7 +206,8 @@ export default function RoleManagementPage() {
               <th className="py-3 px-4 text-center">Type</th>
               <th className="py-3 px-4 text-center">Assigned Users</th>
               <th className="py-3 px-4 text-center">Active Rights</th>
-              <th className="py-3 px-4 text-right">Actions</th>
+              {/* College ERP parity: Action column only displays if user has edit, delete, or assign rights */}
+              {canPerformAnyAction && <th className="py-3 px-4 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -232,39 +246,47 @@ export default function RoleManagementPage() {
                 <td className="py-3.5 px-4 text-center font-mono font-bold text-primary">
                   {role.permissionsCount} rights
                 </td>
-                <td className="py-3.5 px-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    {/* Assign Rights Button (Shield Icon) matching college erp */}
-                    <Link
-                      href={`/admin/roles/${role.id}/rights?name=${encodeURIComponent(role.name)}&slug=${role.slug}`}
-                      className="inline-flex items-center gap-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 px-2.5 py-1 text-xs font-semibold transition"
-                      title="Assign Rights / Permissions"
-                    >
-                      <Shield className="h-3 w-3" />
-                      <span>Rights</span>
-                    </Link>
+                {canPerformAnyAction && (
+                  <td className="py-3.5 px-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {/* Assign Rights Button matching College ERP modules.setup_role_assign_permission */}
+                      <Can permission="rbac:roles_assign">
+                        <Link
+                          href={`/admin/roles/${role.id}/rights?name=${encodeURIComponent(role.name)}&slug=${role.slug}`}
+                          className="inline-flex items-center gap-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 px-2.5 py-1 text-xs font-semibold transition"
+                          title="Assign Rights / Permissions"
+                        >
+                          <Shield className="h-3 w-3" />
+                          <span>Rights</span>
+                        </Link>
+                      </Can>
 
-                    {/* Edit Role Button */}
-                    <button
-                      onClick={() => handleOpenEdit(role)}
-                      className="rounded bg-muted hover:bg-muted/80 text-foreground p-1 text-xs transition"
-                      title="Edit Role Details"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
+                      {/* Edit Role Button matching College ERP modules.setup_role_edit */}
+                      <Can permission="rbac:roles_update">
+                        <button
+                          onClick={() => handleOpenEdit(role)}
+                          className="rounded bg-muted hover:bg-muted/80 text-foreground p-1 text-xs transition"
+                          title="Edit Role Details"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      </Can>
 
-                    {/* Delete Role Button */}
-                    {!role.isSystem && (
-                      <button
-                        onClick={() => handleDelete(role)}
-                        className="rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 p-1 text-xs transition"
-                        title="Delete Role"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </td>
+                      {/* Delete Role Button matching College ERP modules.setup_role_delete */}
+                      {!role.isSystem && (
+                        <Can permission="rbac:roles_delete">
+                          <button
+                            onClick={() => handleDelete(role)}
+                            className="rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 p-1 text-xs transition"
+                            title="Delete Role"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </Can>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

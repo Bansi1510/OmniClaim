@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { Search, UserCheck, Shield, CheckCircle2 } from 'lucide-react';
+import { usePermissions } from '@/hooks/use-permissions';
+import { Can } from '@/components/auth/can';
 
 interface UserRow {
   id: string;
@@ -54,11 +56,14 @@ const INITIAL_USERS: UserRow[] = [
 ];
 
 export default function UserManagementPage() {
+  const { isSystemAdmin, hasPermission } = usePermissions();
   const [users, setUsers] = useState<UserRow[]>(INITIAL_USERS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [newRoleSlug, setNewRoleSlug] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const canAssignRole = isSystemAdmin || hasPermission('rbac:users_assign');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -140,7 +145,7 @@ export default function UserManagementPage() {
               <th className="py-3 px-4">Assigned Role</th>
               <th className="py-3 px-4 text-center">Status</th>
               <th className="py-3 px-4">Assigned Since</th>
-              <th className="py-3 px-4 text-right">Action</th>
+              {canAssignRole && <th className="py-3 px-4 text-right">Action</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -174,15 +179,19 @@ export default function UserManagementPage() {
                 <td className="py-3.5 px-4 text-muted-foreground font-mono">
                   {user.assignedAt}
                 </td>
-                <td className="py-3.5 px-4 text-right">
-                  <button
-                    onClick={() => handleOpenAssign(user)}
-                    className="inline-flex items-center gap-1 rounded bg-secondary hover:bg-secondary/80 text-foreground border border-border px-3 py-1 text-xs font-semibold transition"
-                  >
-                    <UserCheck className="h-3 w-3" />
-                    <span>Change Role</span>
-                  </button>
-                </td>
+                {canAssignRole && (
+                  <td className="py-3.5 px-4 text-right">
+                    <Can permission="rbac:users_assign">
+                      <button
+                        onClick={() => handleOpenAssign(user)}
+                        className="inline-flex items-center gap-1 rounded bg-secondary hover:bg-secondary/80 text-foreground border border-border px-3 py-1 text-xs font-semibold transition"
+                      >
+                        <UserCheck className="h-3 w-3" />
+                        <span>Change Role</span>
+                      </button>
+                    </Can>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { CLAIM_STATUS_THEME, FRAUD_RISK_THEME } from '@/lib/theme-constants';
 import { ClaimStatus, FraudRiskTier } from '@omniclaim/shared-types';
+import { Can } from '@/components/auth/can';
+import { Plus } from 'lucide-react';
 
 interface ClaimRow {
   id: string;
@@ -101,6 +104,17 @@ export default function ClaimsQueuePage() {
             <option value="APPROVED">Approved</option>
             <option value="SETTLED">Settled</option>
           </select>
+
+          {/* New Claim Intake Button - Gated by claims:create */}
+          <Can permission="claims:create">
+            <button
+              onClick={() => alert('Opening new claim submission modal...')}
+              className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-3.5 py-1.5 text-xs font-semibold shadow transition whitespace-nowrap"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Submit Claim</span>
+            </button>
+          </Can>
         </div>
       </div>
 
@@ -129,35 +143,35 @@ export default function ClaimsQueuePage() {
                     <span className="text-[11px] text-muted-foreground block">{claim.incidentDate}</span>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="font-medium text-foreground block">{claim.vehicle}</span>
-                    <span className="text-[11px] font-mono text-muted-foreground">{claim.policyNumber}</span>
+                    <span className="font-medium text-foreground">{claim.vehicle}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground block">{claim.policyNumber}</span>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 font-medium ${statusTheme.badgeClass}`}>
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${statusTheme.badgeClass}`}>
                       {statusTheme.label}
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-foreground">{claim.fraudScore}</span>
+                      <span className="font-mono font-bold text-foreground">{claim.fraudScore}/100</span>
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${riskTheme.badgeClass}`}>
-                        {claim.riskTier}
+                        {riskTheme.label}
                       </span>
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 font-mono font-bold text-emerald-500">
+                  <td className="py-3.5 px-4 font-mono font-bold text-foreground">
                     ${claim.netPayout.toFixed(2)}
                   </td>
                   <td className="py-3.5 px-4 text-muted-foreground">
                     {claim.adjuster}
                   </td>
                   <td className="py-3.5 px-4 text-right">
-                    <a
+                    <Link
                       href={`/claims/${claim.id}`}
-                      className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow hover:bg-primary/90 transition"
+                      className="inline-flex items-center rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-3 py-1 text-xs font-semibold transition"
                     >
-                      Open Dossier →
-                    </a>
+                      Open Workspace →
+                    </Link>
                   </td>
                 </tr>
               );

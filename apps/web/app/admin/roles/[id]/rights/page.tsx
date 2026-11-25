@@ -12,7 +12,9 @@ import {
   ArrowLeft,
   CheckCircle2,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
+import { Can } from '@/components/auth/can';
 
 interface PermissionAction {
   slug: string;
@@ -333,13 +335,23 @@ export default function RoleRightsAssignmentPage({ params }: { params: { id: str
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back to Roles</span>
             </Link>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2 text-xs font-bold shadow-md transition"
+            <Can
+              permission="rbac:roles_update"
+              fallback={
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>Update rights required to save changes</span>
+                </span>
+              }
             >
-              <Save className="h-3.5 w-3.5" />
-              <span>Save Rights</span>
-            </button>
+              <button
+                onClick={handleSave}
+                className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2 text-xs font-bold shadow-md transition"
+              >
+                <Save className="h-3.5 w-3.5" />
+                <span>Save Rights</span>
+              </button>
+            </Can>
           </div>
         </div>
       </div>

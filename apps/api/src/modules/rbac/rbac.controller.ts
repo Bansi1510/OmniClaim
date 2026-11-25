@@ -16,11 +16,17 @@ import { DynamicPermissionsGuard } from '../../common/guards/dynamic-permissions
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
-@ApiTags('RBAC Management (Exact College ERP Contract)')
+@ApiTags('RBAC & Dynamic Navigation (Exact College ERP Contract)')
 @Controller('api/v1/rbac')
 @UseGuards(DynamicPermissionsGuard)
 export class RbacController {
   constructor(private readonly rbacService: RbacService) {}
+
+  @Get('navigation-menu')
+  @ApiOperation({ summary: 'Get dynamic navigation menu filtered by user permissions (college erp GET /menu)' })
+  async getNavigationMenu(@CurrentUser() user: AuthenticatedUser) {
+    return this.rbacService.getNavigationMenuForUser(user.id);
+  }
 
   @Get('roles')
   @RequirePermissions('rbac:roles_create')

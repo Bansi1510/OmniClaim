@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { ReconciledLineItemDto } from '@omniclaim/shared-types';
+import { Can } from '@/components/auth/can';
+import { Lock } from 'lucide-react';
 
 interface ReconciliationTableProps {
   items: ReconciledLineItemDto[];
@@ -103,12 +105,22 @@ export function ReconciliationTable({
                   ${item.approvedCost.toFixed(2)}
                 </td>
                 <td className="py-3 px-3 text-right">
-                  <button
-                    onClick={() => onOverrideItem?.(item.id, !item.isVerifiedByDamage)}
-                    className="rounded border border-border bg-secondary/80 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary transition"
+                  <Can
+                    permission="claims:override_reconciliation"
+                    fallback={
+                      <span className="text-[11px] text-muted-foreground flex items-center justify-end gap-1" title="Permission required to override reconciliation">
+                        <Lock className="h-3 w-3" />
+                        <span className="italic">Read-only</span>
+                      </span>
+                    }
                   >
-                    {item.isVerifiedByDamage ? 'Mark Phantom' : 'Approve Item'}
-                  </button>
+                    <button
+                      onClick={() => onOverrideItem?.(item.id, !item.isVerifiedByDamage)}
+                      className="rounded border border-border bg-secondary/80 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary transition"
+                    >
+                      {item.isVerifiedByDamage ? 'Mark Phantom' : 'Approve Item'}
+                    </button>
+                  </Can>
                 </td>
               </tr>
             ))}
