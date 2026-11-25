@@ -8,6 +8,7 @@ import { ActuarialWaterfall } from '@/components/claims/actuarial-waterfall';
 import { FraudScorecardView } from '@/components/claims/fraud-scorecard';
 import { CLAIM_STATUS_THEME } from '@/lib/theme-constants';
 import { VehiclePartType, ClaimStatus } from '@omniclaim/shared-types';
+import { Can } from '@/components/auth/can';
 
 export default function AdjusterWorkspacePage({ params }: { params: { id: string } }) {
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>('TRIAGE_PENDING');
@@ -138,24 +139,44 @@ export default function AdjusterWorkspacePage({ params }: { params: { id: string
           </p>
         </div>
 
-        {/* Action Settlement Bar */}
+        {/* Action Settlement Bar with Granular RBAC Permissions Gating */}
         <div className="flex items-center gap-3">
           {claimStatus === 'TRIAGE_PENDING' && (
-            <button
-              onClick={handleApprove}
-              className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 text-xs font-bold shadow transition"
+            <Can
+              permission="claims:approve"
+              fallback={
+                <span className="text-xs text-muted-foreground italic">
+                  Approval rights required to authorize claim
+                </span>
+              }
             >
-              Approve Assessment
-            </button>
+              <button
+                onClick={handleApprove}
+                className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 text-xs font-bold shadow transition"
+              >
+                Approve Assessment
+              </button>
+            </Can>
           )}
+
           {claimStatus === 'APPROVED' && (
-            <button
-              onClick={handleSettle}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold shadow transition flex items-center gap-1.5"
+            <Can
+              permission="claims:settle"
+              fallback={
+                <span className="text-xs text-muted-foreground italic">
+                  Finance controller settlement authority required
+                </span>
+              }
             >
-              <span>Disburse Payout & Post Ledger ($675.00)</span>
-            </button>
+              <button
+                onClick={handleSettle}
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold shadow transition flex items-center gap-1.5"
+              >
+                <span>Disburse Payout & Post Ledger ($675.00)</span>
+              </button>
+            </Can>
           )}
+
           {claimStatus === 'SETTLED' && (
             <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 text-xs font-bold text-emerald-500">
               ✔ Balanced Ledger Vouchers Posted (VCHR-2026-91823)
