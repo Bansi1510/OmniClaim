@@ -139,3 +139,87 @@ export interface ClaimDetailsResponseDto {
     expiresAt: string;
   } | null;
 }
+
+/**
+ * Exact permission evaluation logic from C:\college erp\kn_college_erp_react_frontend\src\utility\Utils.jsx
+ */
+export const checkPermission = (
+  userPermissions: string[] = [],
+  permissionsToCheck: string[] = [],
+  useAndCondition: boolean = false
+): boolean => {
+  if (!Array.isArray(permissionsToCheck) || permissionsToCheck.length === 0) {
+    return true;
+  }
+
+  // Super Admin wildcard unrestricted access
+  if (userPermissions.includes('SUPER_ADMIN') || userPermissions.includes('*')) {
+    return true;
+  }
+
+  if (useAndCondition) {
+    return permissionsToCheck.every((permission) => userPermissions.includes(permission));
+  } else {
+    return permissionsToCheck.some((permission) => userPermissions.includes(permission));
+  }
+};
+
+export const ROLE_PRESETS: Record<string, { name: string; slug: string; isSystemAdmin: boolean; permissions: string[] }> = {
+  SUPER_ADMIN: {
+    name: 'Super Administrator',
+    slug: 'SUPER_ADMIN',
+    isSystemAdmin: true,
+    permissions: ['*'],
+  },
+  CLAIMS_ADJUSTER: {
+    name: 'Senior Claims Adjuster',
+    slug: 'CLAIMS_ADJUSTER',
+    isSystemAdmin: false,
+    permissions: [
+      'claims:read',
+      'claims:create',
+      'claims:update',
+      'claims:approve',
+      'claims:override_reconciliation',
+      'parts:read',
+      'parts:update',
+      'reports:read',
+    ],
+  },
+  SIU_INVESTIGATOR: {
+    name: 'SIU Fraud Investigator',
+    slug: 'SIU_INVESTIGATOR',
+    isSystemAdmin: false,
+    permissions: [
+      'claims:read',
+      'fraud:read',
+      'fraud:override',
+      'fraud:flag',
+      'reports:read',
+      'audit:read',
+    ],
+  },
+  FINANCE_OFFICER: {
+    name: 'Finance & Settlement Officer',
+    slug: 'FINANCE_OFFICER',
+    isSystemAdmin: false,
+    permissions: [
+      'claims:read',
+      'claims:settle',
+      'ledger:read',
+      'ledger:reconcile',
+      'ledger:override',
+      'reports:read',
+      'reports:export',
+    ],
+  },
+  POLICYHOLDER: {
+    name: 'Policyholder / Claimant',
+    slug: 'POLICYHOLDER',
+    isSystemAdmin: false,
+    permissions: [
+      'claims:read',
+      'claims:create',
+    ],
+  },
+};
