@@ -5,6 +5,11 @@ import { RedisModule } from './modules/redis/redis.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { ClaimFsmModule } from './modules/fsm/claim-fsm.module';
 import { ClaimsModule } from './modules/claims/claims.module';
+import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
+import { ActuarialModule } from './modules/actuarial/actuarial.module';
+import { FraudEngineModule } from './modules/fraud/fraud.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
+import { StpModule } from './modules/stp/stp.module';
 
 @Module({
   imports: [
@@ -16,6 +21,11 @@ import { ClaimsModule } from './modules/claims/claims.module';
     RedisModule,
     RbacModule,
     ClaimFsmModule,
+    ReconciliationModule,
+    ActuarialModule,
+    FraudEngineModule,
+    LedgerModule,
+    StpModule,
     ClaimsModule,
   ],
 })
