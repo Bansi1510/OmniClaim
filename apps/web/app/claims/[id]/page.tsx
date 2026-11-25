@@ -10,7 +10,8 @@ import { CLAIM_STATUS_THEME } from '@/lib/theme-constants';
 import { VehiclePartType, ClaimStatus } from '@omniclaim/shared-types';
 import { Can } from '@/components/auth/can';
 
-export default function AdjusterWorkspacePage({ params }: { params: { id: string } }) {
+export default function AdjusterWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
+  const unwrappedParams = React.use(params);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>('TRIAGE_PENDING');
   const [version, setVersion] = useState(1);
   const [activeTab, setActiveTab] = useState<'evidence' | 'reconciliation' | 'fraud' | 'actuarial'>('evidence');

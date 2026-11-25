@@ -115,7 +115,8 @@ const MODULE_SECTIONS: ModuleSection[] = [
   },
 ];
 
-export default function RoleRightsAssignmentPage({ params }: { params: { id: string } }) {
+export default function RoleRightsAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+  const unwrappedParams = React.use(params);
   const searchParams = useSearchParams();
   const roleName = searchParams.get('name') || 'Senior Claims Adjuster';
   const roleSlug = searchParams.get('slug') || 'SENIOR_ADJUSTER';

@@ -12,12 +12,11 @@ export class ActuarialService {
    * Deterministic age-graduated depreciation schedule for sheet metal parts.
    */
   getMetalDepreciationRate(vehicleAgeYears: number): Prisma.Decimal {
-    if (vehicleAgeYears < 1) return new Prisma.Decimal('0.00');
+    if (vehicleAgeYears <= 1) return new Prisma.Decimal('0.00');
     if (vehicleAgeYears <= 2) return new Prisma.Decimal('0.10');
     if (vehicleAgeYears <= 3) return new Prisma.Decimal('0.20');
     if (vehicleAgeYears <= 4) return new Prisma.Decimal('0.30');
-    if (vehicleAgeYears <= 5) return new Prisma.Decimal('0.40');
-    return new Prisma.Decimal('0.50'); // 50% cap
+    return new Prisma.Decimal('0.50'); // 50% cap for >= 5 years
   }
 
   /**

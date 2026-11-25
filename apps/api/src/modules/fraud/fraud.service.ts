@@ -162,7 +162,7 @@ export class FraudEngineService {
       indicators.reduce((acc, curr) => acc + curr.riskContribution, 0),
     );
 
-    let riskTier = FraudRiskTier.LOW;
+    let riskTier: FraudRiskTier = FraudRiskTier.LOW;
     if (compositeScore >= 70) riskTier = FraudRiskTier.CRITICAL;
     else if (compositeScore >= 45) riskTier = FraudRiskTier.HIGH;
     else if (compositeScore >= 20) riskTier = FraudRiskTier.MEDIUM;
@@ -226,7 +226,7 @@ export class FraudEngineService {
         .reduce((acc, curr) => acc + curr.riskContribution, 0),
     );
 
-    let newTier = FraudRiskTier.LOW;
+    let newTier: FraudRiskTier = FraudRiskTier.LOW;
     if (activeScore >= 70) newTier = FraudRiskTier.CRITICAL;
     else if (activeScore >= 45) newTier = FraudRiskTier.HIGH;
     else if (activeScore >= 20) newTier = FraudRiskTier.MEDIUM;
