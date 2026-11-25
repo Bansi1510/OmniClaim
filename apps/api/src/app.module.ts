@@ -10,6 +10,7 @@ import { ActuarialModule } from './modules/actuarial/actuarial.module';
 import { FraudEngineModule } from './modules/fraud/fraud.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { StpModule } from './modules/stp/stp.module';
+import { WebhookModule } from './modules/webhooks/webhook.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StpModule } from './modules/stp/stp.module';
     LedgerModule,
     StpModule,
     ClaimsModule,
+    WebhookModule,
   ],
 })
 export class AppModule {}
