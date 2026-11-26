@@ -424,9 +424,11 @@ export class RbacService {
 
     return users.map((u) => ({
       id: u.id,
+      username: u.username || u.email.split('@')[0],
       email: u.email,
       fullName: u.fullName,
       isActive: u.isActive,
+      isSuperAdmin: u.isSuperAdmin,
       roles: u.roles.map((r) => ({
         id: r.role.id,
         name: r.role.name,

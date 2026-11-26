@@ -63,6 +63,10 @@ export default function SuperAdminDashboardPage() {
   const [masterEnabled, setMasterEnabled] = useState(store.superMasterPasswordEnabled);
   const [showMasterPwd, setShowMasterPwd] = useState(false);
 
+  React.useEffect(() => {
+    setMasterEnabled(store.superMasterPasswordEnabled);
+  }, [store.superMasterPasswordEnabled]);
+
   // Dynamic System Setting add/edit state
   const [settingKey, setSettingKey] = useState('');
   const [settingLabel, setSettingLabel] = useState('');

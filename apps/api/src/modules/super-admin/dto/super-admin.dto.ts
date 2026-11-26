@@ -53,9 +53,13 @@ export class CreatePolicyDto {
   @IsNotEmpty()
   policyNumber: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  policyHolderId: string;
+  policyHolderId?: string;
+
+  @IsOptional()
+  @IsString()
+  policyHolderName?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -238,6 +242,7 @@ export class CreateUserDto {
   @IsString() @IsNotEmpty() password: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsBoolean() isSuperAdmin?: boolean;
+  @IsOptional() @IsString() roleSlug?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) roleIds?: string[];
 }
 
@@ -248,7 +253,25 @@ export class UpdateUserDto {
   @IsOptional() @IsString() password?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsBoolean() isSuperAdmin?: boolean;
+  @IsOptional() @IsString() roleSlug?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) roleIds?: string[];
+}
+
+export class CreateManualJournalDto {
+  @IsOptional() @IsString() claimNumber?: string;
+  @IsString() @IsNotEmpty() account: string;
+  @IsString() @IsNotEmpty() entryType: 'DEBIT' | 'CREDIT';
+  @IsNumber() amount: number;
+  @IsOptional() @IsString() description?: string;
+}
+
+export class UpdateManualJournalDto {
+  @IsOptional() @IsString() claimNumber?: string;
+  @IsOptional() @IsString() account?: string;
+  @IsOptional() @IsString() entryType?: 'DEBIT' | 'CREDIT';
+  @IsOptional() @IsNumber() amount?: number;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsBoolean() isReconciled?: boolean;
 }
 
 export class CreateLedgerAccountDto {

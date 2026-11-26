@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     exitMasterSession,
     logout,
   } = usePermissions();
-  const { settings } = useDynamicStore();
+  const { settings, isBackendConnected } = useDynamicStore();
 
   const brandName =
     settings.find((s) => s.key === 'COMPANY_BRAND_NAME')?.value || 'OmniClaim';
@@ -143,8 +143,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
 
             <div className="hidden xl:flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono font-semibold text-foreground">@{username}</span>
+              <span className={`h-2 w-2 rounded-full animate-pulse ${isBackendConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className="font-mono font-semibold text-foreground">
+                @{username} · {isBackendConnected ? 'Live DB' : 'Local'}
+              </span>
             </div>
 
             <button

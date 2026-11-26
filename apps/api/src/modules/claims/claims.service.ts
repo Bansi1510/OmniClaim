@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ClaimFsmService } from '../fsm/claim-fsm.service';
 import { CreateClaimDto, UpdateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
-import { ClaimStatus } from '@omniclaim/database';
+import { ClaimStatus, FraudRiskTier } from '@omniclaim/database';
 
 @Injectable()
 export class ClaimsService {
@@ -28,12 +28,14 @@ export class ClaimsService {
   }
 
   async createClaim(dto: CreateClaimDto, userId: string) {
-    const policy = await this.prisma.policy.findUnique({
-      where: { id: dto.policyId },
-    });
+    const policy = dto.policyId
+      ? await this.prisma.policy.findUnique({ where: { id: dto.policyId } })
+      : dto.policyNumber
+        ? await this.prisma.policy.findUnique({ where: { policyNumber: dto.policyNumber } })
+        : await this.prisma.policy.findFirst({ where: { isActive: true } });
 
     if (!policy) {
-      throw new NotFoundException(`Policy ${dto.policyId} not found.`);
+      throw new NotFoundException(`Policy ${dto.policyId || dto.policyNumber} not found.`);
     }
 
     if (!policy.isActive) {
@@ -41,33 +43,76 @@ export class ClaimsService {
     }
 
     const claimNumber = this.generateClaimNumber();
+    const actor = await this.prisma.user.findUnique({ where: { id: userId } })
+      || await this.prisma.user.findFirst({ where: { isSuperAdmin: true } });
 
     const claim = await this.prisma.claim.create({
       data: {
         claimNumber,
-        policyId: dto.policyId,
-        status: ClaimStatus.DRAFT,
-        incidentDate: new Date(dto.incidentDate),
-        incidentLatitude: dto.incidentLatitude,
-        incidentLongitude: dto.incidentLongitude,
-        incidentDescription: dto.incidentDescription,
-        version: 0,
+        policyId: policy.id,
+        status: dto.status || ClaimStatus.TRIAGE_PENDING,
+        incidentDate: dto.incidentDate ? new Date(dto.incidentDate) : new Date(),
+        incidentLatitude: dto.incidentLatitude ?? 37.7749,
+        incidentLongitude: dto.incidentLongitude ?? -122.4194,
+        incidentDescription: dto.incidentDescription || 'Submitted via OmniClaim Command Center',
+        adjusterId: dto.adjusterId || actor?.id,
+        version: 1,
       },
       include: {
         policy: true,
+        adjuster: { select: { id: true, fullName: true, email: true } },
       },
     });
 
+    if (typeof dto.netPayout === 'number') {
+      await this.prisma.actuarialAssessment.create({
+        data: {
+          claimId: claim.id,
+          grossPartsTotal: dto.netPayout,
+          metalDepreciation: 0,
+          plasticDepreciation: 0,
+          glassDepreciation: 0,
+          totalDepreciation: 0,
+          totalLaborApproved: 0,
+          applicableDeductible: policy.baseDeductible,
+          salvageValue: 0,
+          netPayout: dto.netPayout,
+          isStpQualified: dto.netPayout <= 750 && (dto.fraudScore ?? 0) < 15,
+        },
+      });
+    }
+
+    if (typeof dto.fraudScore === 'number') {
+      const score = Math.min(100, Math.max(0, dto.fraudScore));
+      const riskTier: FraudRiskTier =
+        score >= 70
+          ? FraudRiskTier.CRITICAL
+          : score >= 45
+            ? FraudRiskTier.HIGH
+            : score >= 20
+              ? FraudRiskTier.MEDIUM
+              : FraudRiskTier.LOW;
+      await this.prisma.fraudScorecard.create({
+        data: {
+          claimId: claim.id,
+          compositeScore: score,
+          riskTier,
+        },
+      });
+    }
+
     // Record creation transition log
-    await this.prisma.claimTransitionLog.create({
-      data: {
-        claimId: claim.id,
-        fromStatus: ClaimStatus.DRAFT,
-        toStatus: ClaimStatus.DRAFT,
-        reason: 'Claim initiated via intake portal',
-        triggeredById: userId,
-      },
-    });
+    if (actor) {
+      await this.prisma.claimTransitionLog.create({
+        data: {
+          claimId: claim.id,
+          fromStatus: ClaimStatus.DRAFT,
+          toStatus: claim.status,
+          reason: 'Claim initiated via intake portal',
+          triggeredById: actor.id,
+        },
+      });
+    }
 
     this.logger.log(`Created new claim ${claim.claimNumber} for policy ${policy.policyNumber}`);
     return claim;
@@ -237,7 +282,7 @@ export class ClaimsService {
   }
 
   async updateClaim(claimId: string, dto: UpdateClaimDto, userId: string) {
-    const existing = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    const existing = await this.prisma.claim.findUnique({ where: { id: claimId }, include: { policy: true } });
     if (!existing) throw new NotFoundException(`Claim ${claimId} not found.`);
 
     const updated = await this.prisma.claim.update({
@@ -247,21 +292,64 @@ export class ClaimsService {
         ...(dto.incidentLatitude !== undefined ? { incidentLatitude: dto.incidentLatitude } : {}),
         ...(dto.incidentLongitude !== undefined ? { incidentLongitude: dto.incidentLongitude } : {}),
         ...(dto.incidentDescription !== undefined ? { incidentDescription: dto.incidentDescription } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
         ...(dto.adjusterId !== undefined ? { adjusterId: dto.adjusterId } : {}),
         version: { increment: 1 },
       },
       include: { policy: true },
     });
 
-    await this.prisma.claimAuditLog.create({
-      data: {
-        claimId,
-        userId,
-        action: 'UPDATE_CLAIM',
-        fieldName: 'metadata',
-        newValue: JSON.stringify(dto),
-      },
-    });
+    if (typeof dto.netPayout === 'number') {
+      await this.prisma.actuarialAssessment.upsert({
+        where: { claimId },
+        update: { netPayout: dto.netPayout },
+        create: {
+          claimId,
+          grossPartsTotal: dto.netPayout,
+          metalDepreciation: 0,
+          plasticDepreciation: 0,
+          glassDepreciation: 0,
+          totalDepreciation: 0,
+          totalLaborApproved: 0,
+          applicableDeductible: existing.policy.baseDeductible,
+          salvageValue: 0,
+          netPayout: dto.netPayout,
+          isStpQualified: dto.netPayout <= 750,
+        },
+      });
+    }
+
+    if (typeof dto.fraudScore === 'number') {
+      const score = Math.min(100, Math.max(0, dto.fraudScore));
+      const riskTier: FraudRiskTier =
+        score >= 70
+          ? FraudRiskTier.CRITICAL
+          : score >= 45
+            ? FraudRiskTier.HIGH
+            : score >= 20
+              ? FraudRiskTier.MEDIUM
+              : FraudRiskTier.LOW;
+      await this.prisma.fraudScorecard.upsert({
+        where: { claimId },
+        update: { compositeScore: score, riskTier },
+        create: { claimId, compositeScore: score, riskTier },
+      });
+    }
+
+    const actor = await this.prisma.user.findUnique({ where: { id: userId } })
+      || await this.prisma.user.findFirst({ where: { isSuperAdmin: true } });
+    if (actor) {
+      await this.prisma.claimAuditLog.create({
+        data: {
+          claimId,
+          userId: actor.id,
+          action: 'UPDATE_CLAIM',
+          fieldName: dto.status ? 'status' : 'metadata',
+          oldValue: existing.status,
+          newValue: dto.status || JSON.stringify(dto),
+        },
+      });
+    }
 
     return updated;
   }

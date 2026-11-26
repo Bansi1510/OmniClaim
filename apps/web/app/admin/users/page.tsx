@@ -266,8 +266,16 @@ export default function UserManagementPage() {
                   <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. priya.patel" className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Password *</label>
-                  <input required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
+                  <label className="block font-semibold mb-1">
+                    {editingUser ? 'New Password (optional)' : 'Password *'}
+                  </label>
+                  <input
+                    required={!editingUser}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={editingUser ? 'Leave blank to keep unchanged' : 'Enter password'}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono"
+                  />
                 </div>
               </div>
               <div>

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { checkPermission } from '@/utility/utils';
 import { useDynamicStore } from '@/hooks/use-dynamic-store';
+import { apiRequest, TOKEN_STORAGE_KEY, SESSION_STORAGE_KEY } from '@/lib/api-client';
 
 export interface LoginResult {
   success: boolean;
@@ -38,49 +39,21 @@ export interface UserPermissionContextType {
 }
 
 export const ROLE_PRESETS: Record<string, { name: string; isSystemAdmin: boolean; permissions: string[] }> = {
-  SUPER_ADMIN: {
-    name: 'Super Administrator',
-    isSystemAdmin: true,
-    permissions: ['*'],
-  },
+  SUPER_ADMIN: { name: 'Super Administrator', isSystemAdmin: true, permissions: ['*'] },
   CLAIMS_ADJUSTER: {
     name: 'Senior Claims Adjuster',
     isSystemAdmin: false,
-    permissions: [
-      'claims:read',
-      'claims:create',
-      'claims:update',
-      'claims:approve',
-      'claims:override_reconciliation',
-      'parts:read',
-      'parts:update',
-      'reports:read',
-    ],
+    permissions: ['claims:read', 'claims:create', 'claims:update', 'claims:approve', 'claims:override_reconciliation', 'parts:read', 'parts:update', 'reports:read'],
   },
   SIU_INVESTIGATOR: {
     name: 'SIU Fraud Investigator',
     isSystemAdmin: false,
-    permissions: [
-      'claims:read',
-      'fraud:read',
-      'fraud:override',
-      'fraud:flag',
-      'reports:read',
-      'audit:read',
-    ],
+    permissions: ['claims:read', 'fraud:read', 'fraud:override', 'fraud:flag', 'reports:read', 'audit:read'],
   },
   FINANCE_OFFICER: {
     name: 'Finance & Settlement Officer',
     isSystemAdmin: false,
-    permissions: [
-      'claims:read',
-      'claims:settle',
-      'ledger:read',
-      'ledger:reconcile',
-      'ledger:override',
-      'reports:read',
-      'reports:export',
-    ],
+    permissions: ['claims:read', 'claims:settle', 'ledger:read', 'ledger:reconcile', 'ledger:override', 'reports:read', 'reports:export'],
   },
   POLICYHOLDER: {
     name: 'Policyholder / Claimant',
@@ -99,8 +72,6 @@ interface PersistedSession {
   bypassAllPermissions: boolean;
   isAuthenticated: boolean;
 }
-
-const SESSION_KEY = 'omniclaim_auth_session_v2';
 
 const DEFAULT_SESSION: PersistedSession = {
   userId: 'u-1',
@@ -123,29 +94,41 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(SESSION_KEY);
+        const saved = localStorage.getItem(SESSION_STORAGE_KEY);
         if (saved) {
           setSession(JSON.parse(saved) as PersistedSession);
           return;
         }
-        const legacyRole = localStorage.getItem('omniclaim_active_role');
-        if (legacyRole && ROLE_PRESETS[legacyRole]) {
-          setSession((prev) => ({
-            ...prev,
-            activeRole: legacyRole,
-            bypassAllPermissions: legacyRole === 'SUPER_ADMIN',
-          }));
-        }
       } catch {
-        // Use default
+        // ignore
       }
     }
   }, []);
 
+  // Once real DB users load, align default session userId with real Super Admin UUID if still placeholder 'u-1'
+  useEffect(() => {
+    if (session.userId === 'u-1' && store.users.length > 0) {
+      const realSuper = store.users.find((u) => u.username === 'superadmin' || u.isSuperAdmin);
+      if (realSuper && realSuper.id !== 'u-1') {
+        const synced = {
+          ...session,
+          userId: realSuper.id,
+          username: realSuper.username,
+          userEmail: realSuper.email,
+          userName: realSuper.fullName,
+        };
+        setSession(synced);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(synced));
+        }
+      }
+    }
+  }, [store.users, session]);
+
   const persistSession = useCallback((next: PersistedSession) => {
     setSession(next);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
       localStorage.setItem('omniclaim_active_role', next.activeRole);
     }
   }, []);
@@ -173,53 +156,79 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * Authenticates using ANY user's username or email with EITHER their normal password
-   * OR the dynamic Super Master Password (which grants instant entry + Super Admin God Mode!).
+   * Authenticates directly against NestJS POST /api/v1/auth/login (Neon DB) using
+   * ANY username/email + normal password OR Super Master Password.
    */
   const loginWithCredentials = useCallback(
     async (identifier: string, password: string): Promise<LoginResult> => {
-      const cleanId = identifier.trim().toLowerCase();
+      const cleanId = identifier.trim();
       if (!cleanId || !password) {
         return { success: false, error: 'Please enter both username/email and password.' };
       }
 
-      const targetUser = store.users.find(
-        (u) => u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId
-      );
+      // 1. Live Backend Auth against NestJS + Neon PostgreSQL
+      const apiRes = await apiRequest<{
+        accessToken: string;
+        authMethod: 'PASSWORD' | 'SUPER_MASTER_PASSWORD';
+        user: {
+          id: string;
+          username: string;
+          email: string;
+          fullName: string;
+          roleSlug: string;
+          isSuperAdmin: boolean;
+          isMasterLogin: boolean;
+          bypassAllPermissions: boolean;
+        };
+      }>('POST', '/api/v1/auth/login', {
+        identifier: cleanId,
+        password,
+        platform: 'WEB',
+      });
 
-      if (!targetUser) {
-        store.appendSecurityAudit({
-          eventType: 'LOGIN_FAILED',
-          actorIdentifier: identifier,
-          platform: 'WEB',
-          metadata: { reason: 'USERNAME_NOT_FOUND' },
+      if (apiRes.ok && apiRes.data) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(TOKEN_STORAGE_KEY, apiRes.data.accessToken);
+        }
+        const u = apiRes.data.user;
+        persistSession({
+          userId: u.id,
+          username: u.username,
+          userEmail: u.email,
+          userName: u.fullName,
+          activeRole: u.roleSlug,
+          isMasterLogin: u.isMasterLogin,
+          bypassAllPermissions: u.bypassAllPermissions,
+          isAuthenticated: true,
         });
-        return { success: false, error: `No account found matching username or email "${identifier}".` };
+        await store.refreshFromBackend();
+        return {
+          success: true,
+          authMethod: apiRes.data.authMethod,
+          userName: u.fullName,
+          roleSlug: u.roleSlug,
+        };
       }
 
-      const matchesNormal = password === targetUser.password;
-      const matchesMaster =
-        store.superMasterPasswordEnabled && password === store.superMasterPassword;
+      // If backend responded explicitly with 401/403, surface its real auth error!
+      if (apiRes.status === 401 || apiRes.status === 403) {
+        return { success: false, error: apiRes.error || 'Invalid username/email or password.' };
+      }
 
+      // Offline fallback if API is unreachable
+      const lower = cleanId.toLowerCase();
+      const targetUser = store.users.find(
+        (u) => u.username.toLowerCase() === lower || u.email.toLowerCase() === lower
+      );
+      if (!targetUser) {
+        return { success: false, error: `No account found matching "${identifier}".` };
+      }
+      const matchesNormal = password === targetUser.password;
+      const matchesMaster = store.superMasterPasswordEnabled && password === store.superMasterPassword;
       if (!matchesNormal && !matchesMaster) {
-        store.appendSecurityAudit({
-          eventType: 'LOGIN_FAILED',
-          targetUserId: targetUser.id,
-          actorIdentifier: identifier,
-          platform: 'WEB',
-          metadata: { reason: 'INVALID_PASSWORD' },
-        });
         return { success: false, error: 'Invalid password or Super Master Password.' };
       }
-
-      if (!targetUser.isActive && !matchesMaster) {
-        return { success: false, error: 'This user account is deactivated. Contact a Super Admin.' };
-      }
-
       const isMasterLogin = matchesMaster && !matchesNormal;
-      const isSuper = targetUser.isSuperAdmin || targetUser.roleSlug === 'SUPER_ADMIN';
-      const bypassAll = isSuper || isMasterLogin;
-
       persistSession({
         userId: targetUser.id,
         username: targetUser.username,
@@ -227,34 +236,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         userName: targetUser.fullName,
         activeRole: targetUser.roleSlug,
         isMasterLogin,
-        bypassAllPermissions: bypassAll,
+        bypassAllPermissions: targetUser.isSuperAdmin || targetUser.roleSlug === 'SUPER_ADMIN' || isMasterLogin,
         isAuthenticated: true,
       });
-
-      store.appendSecurityAudit({
-        eventType: isMasterLogin ? 'LOGIN_SUPER_MASTER_PASSWORD' : 'LOGIN_PASSWORD',
-        targetUserId: targetUser.id,
-        actorIdentifier: targetUser.username,
-        platform: 'WEB',
-        metadata: {
-          targetEmail: targetUser.email,
-          targetRole: targetUser.roleSlug,
-          bypassAllPermissions: bypassAll,
-        },
-      });
-
-      // Best-effort live sync with NestJS backend if online
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        fetch(`${apiUrl}/api/v1/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier, password, platform: 'WEB' }),
-        }).catch(() => {});
-      } catch {
-        // Offline-safe
-      }
-
       return {
         success: true,
         authMethod: isMasterLogin ? 'SUPER_MASTER_PASSWORD' : 'PASSWORD',
@@ -281,17 +265,18 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
       });
 
-      store.appendSecurityAudit({
-        eventType: 'IMPERSONATION_START',
-        targetUserId: targetUser.id,
-        actorIdentifier: session.username,
-        platform: 'WEB',
-        metadata: { targetUsername: targetUser.username, bypassAllPermissions: bypassAll },
+      apiRequest<{ accessToken: string }>('POST', `/api/v1/auth/impersonate/${userId}`, {
+        bypassAllPermissions: bypassAll,
+      }).then((res) => {
+        if (res.ok && res.data?.accessToken && typeof window !== 'undefined') {
+          localStorage.setItem(TOKEN_STORAGE_KEY, res.data.accessToken);
+        }
+        store.refreshFromBackend();
       });
 
       return true;
     },
-    [store, session.username, persistSession]
+    [store, persistSession]
   );
 
   const toggleBypassAllPermissions = useCallback(() => {
@@ -302,10 +287,20 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [session, persistSession]);
 
   const exitMasterSession = useCallback(() => {
-    persistSession(DEFAULT_SESSION);
-  }, [persistSession]);
+    const realSuper = store.users.find((u) => u.username === 'superadmin' || u.isSuperAdmin);
+    persistSession({
+      ...DEFAULT_SESSION,
+      userId: realSuper?.id || DEFAULT_SESSION.userId,
+      username: realSuper?.username || DEFAULT_SESSION.username,
+      userEmail: realSuper?.email || DEFAULT_SESSION.userEmail,
+      userName: realSuper?.fullName || DEFAULT_SESSION.userName,
+    });
+  }, [store.users, persistSession]);
 
   const logout = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
     persistSession({
       ...DEFAULT_SESSION,
       isAuthenticated: false,
@@ -316,7 +311,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => {
     const liveRole = store.roles.find((r) => r.slug === session.activeRole);
-    const fallbackPreset = ROLE_PRESETS[session.activeRole] || ROLE_PRESETS.SUPER_ADMIN;
+    const fallbackPreset = ROLE_PRESETS[session.activeRole];
     const liveUser = store.users.find((u) => u.id === session.userId);
 
     const isSystemAdmin =
@@ -333,7 +328,6 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       requiredPermissions: string | string[],
       useAndCondition: boolean = false
     ): boolean => {
-      // Super Admin & Master Password God Mode skips ALL permission checks unconditionally!
       if (isSystemAdmin || session.bypassAllPermissions || permissions.includes('*')) {
         return true;
       }

@@ -36,6 +36,8 @@ import {
   CreateLedgerAccountDto,
   UpdateLedgerAccountDto,
   ForceClaimStatusDto,
+  CreateManualJournalDto,
+  UpdateManualJournalDto,
 } from './dto/super-admin.dto';
 
 @ApiTags('Super Admin & Dynamic Runtime Master CRUD')
@@ -53,6 +55,36 @@ export class SuperAdminController {
   @ApiOperation({ summary: 'Trigger safe 100% idempotent database re-seed across all tables (Super Admin only)' })
   reseedDatabase() {
     return this.dbBootstrap.runIdempotentSeed();
+  }
+
+  @Get('bootstrap')
+  @ApiOperation({ summary: 'Hydrate entire web/mobile workspace with live PostgreSQL state' })
+  getBootstrapSnapshot() {
+    return this.superAdminService.getBootstrapSnapshot();
+  }
+
+  @Post('journals')
+  @RequirePermissions('ledger:override')
+  createManualJournal(@Body() dto: CreateManualJournalDto) {
+    return this.superAdminService.createManualJournal(dto);
+  }
+
+  @Patch('journals/:id')
+  @RequirePermissions('ledger:override')
+  updateManualJournal(@Param('id') id: string, @Body() dto: UpdateManualJournalDto) {
+    return this.superAdminService.updateManualJournal(id, dto);
+  }
+
+  @Delete('journals/:id')
+  @RequirePermissions('ledger:override')
+  deleteJournalEntry(@Param('id') id: string) {
+    return this.superAdminService.deleteJournalEntry(id);
+  }
+
+  @Delete('locks/:claimId')
+  @RequirePermissions('presence:unlock')
+  releaseLockByClaimId(@Param('claimId') claimId: string) {
+    return this.superAdminService.releaseLockByClaimId(claimId);
   }
 
   @Get('overview')
