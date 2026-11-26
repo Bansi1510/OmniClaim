@@ -624,3 +624,50 @@ model DynamicMenuItem {
 
   @@index([parentKey, sortOrder])
 }
+
+// ==========================================
+// 7. GLOBAL HTTP REQUEST & FIELD-DIFF AUDIT LOG
+// ==========================================
+
+model SystemActivityAuditLog {
+  id            String   @id @default(uuid())
+  method        String   // GET, POST, PUT, PATCH, DELETE, etc.
+  path          String   // Full request URL path
+  routePattern  String?  // Normalized route pattern (e.g. /api/v1/super-admin/policies/:id)
+  module        String   // CLAIMS, POLICIES, USERS, ROLES, GARAGES, PARTS, RULES, MENUS, SETTINGS, LEDGER, AUTH, AUDIT, SYSTEM
+  entityType    String?  // Claim, Policy, User, Role, RepairGarage, VehiclePartCatalog, SystemSetting, etc.
+  entityId      String?  // Target entity UUID or identifier
+  action        String   // e.g. LIST_CLAIMS, CREATE_POLICY, UPDATE_USER, DELETE_GARAGE, LOGIN
+  statusCode    Int      // HTTP status code (200, 201, 400, 401, 403, 404, 500)
+  success       Boolean  @default(true)
+  durationMs    Int      @default(0)
+
+  // Actor (Who changed / accessed)
+  userId        String?
+  username      String?
+  userEmail     String?
+  userFullName  String?
+  userRole      String?
+  isMasterLogin Boolean  @default(false)
+
+  // Request Telemetry
+  ipAddress     String?
+  userAgent     String?
+  queryParams   Json?
+  requestBody   Json?    // Sensitive fields automatically redacted
+
+  // Change Diff Tracking (Old Value -> New Value -> Per-Field Diff)
+  oldValues     Json?
+  newValues     Json?
+  changedFields Json?    // Array of { field, oldValue, newValue }
+  errorMessage  String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([method])
+  @@index([module])
+  @@index([entityType, entityId])
+  @@index([username])
+  @@index([statusCode])
+  @@index([createdAt])
+}

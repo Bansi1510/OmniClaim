@@ -86,6 +86,22 @@ describe('Database Migration SQL & Full-Schema Idempotent Seeder Verification', 
     }
   });
 
+  const auditMigrationSqlPath = path.join(
+    migrationsRoot,
+    '20261126010000_add_system_activity_audit_log',
+    'migration.sql',
+  );
+
+  it('contains official audit log migration creating SystemActivityAuditLog & all 6 indexes without BOM', () => {
+    expect(fs.existsSync(auditMigrationSqlPath)).toBe(true);
+    const raw = fs.readFileSync(auditMigrationSqlPath);
+    expect(!(raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf)).toBe(true);
+    const sql = raw.toString('utf8');
+    expect(sql).toContain('CREATE TABLE "SystemActivityAuditLog"');
+    expect(sql).toContain('SystemActivityAuditLog_method_idx');
+    expect(sql).toContain('SystemActivityAuditLog_username_idx');
+  });
+
   it('executes seedOmniClaimDatabase idempotently across ALL models without duplicate errors', async () => {
     const calledModels = new Set<string>();
     const journalNumbers = new Set<string>();
@@ -129,6 +145,7 @@ describe('Database Migration SQL & Full-Schema Idempotent Seeder Verification', 
       claimLock: makeUpsertMock('claimLock'),
       settlementVoucher: makeUpsertMock('settlementVoucher'),
       securityAuditLog: makeUpsertMock('securityAuditLog'),
+      systemActivityAuditLog: makeUpsertMock('systemActivityAuditLog'),
       ledgerJournalEntry: {
         findUnique: jest.fn(({ where: { entryNumber } }) => {
           calledModels.add('ledgerJournalEntry');
@@ -157,8 +174,9 @@ describe('Database Migration SQL & Full-Schema Idempotent Seeder Verification', 
     expect(run1.claims).toBe(3);
     expect(run1.journals).toBe(2);
 
-    // Every single domain model seeded
-    expect(calledModels.size).toBe(29);
+    // Every single domain model seeded (including SystemActivityAuditLog)
+    expect(calledModels.size).toBe(30);
+    expect(run1.activityAuditLogs).toBe(3);
     expect(mockPrisma.ledgerJournalEntry.create).toHaveBeenCalledTimes(2);
 
     // Second run (Idempotency Check!) -> journals must NOT duplicate!

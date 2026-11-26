@@ -176,6 +176,9 @@ export default function SuperAdminDashboardPage() {
           <Link href="/ledger" className="rounded-lg border border-border bg-card hover:bg-muted px-3 py-1.5 text-xs font-semibold flex items-center gap-1">
             Ledger <ExternalLink className="h-3 w-3" />
           </Link>
+          <Link href="/audit" className="rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-bold flex items-center gap-1">
+            Audit Logs <ExternalLink className="h-3 w-3" />
+          </Link>
           <button
             onClick={() => {
               if (confirm('Reset all dynamic local demo changes back to factory seed defaults?')) {

@@ -37,6 +37,7 @@ export interface SeedSummary {
   policies: number;
   claims: number;
   journals: number;
+  activityAuditLogs: number;
 }
 
 /**
@@ -805,6 +806,99 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
     },
   });
 
+  // Initial Global HTTP Request & Change Audit Log Seed Entries (Idempotent)
+  const seedActivityLogs = [
+    {
+      id: 'seed-act-001',
+      method: 'POST',
+      path: '/api/v1/super-admin/policies',
+      routePattern: '/api/v1/super-admin/policies',
+      module: 'POLICIES',
+      entityType: 'Policy',
+      entityId: createdPolicies.get('POL-OMNI-2026-9081')!,
+      action: 'CREATE_POLICY',
+      statusCode: 201,
+      success: true,
+      durationMs: 38,
+      userId: adminId,
+      username: 'superadmin',
+      userEmail: 'admin@omniclaim.internal',
+      userFullName: 'Chief Enterprise Admin',
+      userRole: 'SUPER_ADMIN',
+      isMasterLogin: false,
+      ipAddress: '127.0.0.1',
+      userAgent: 'OmniClaim-Seeder/2.0',
+      requestBody: { policyNumber: 'POL-OMNI-2026-9081', vehicleMake: 'Honda', vehicleModel: 'Accord', coverageLimit: 50000 },
+      oldValues: null,
+      newValues: { policyNumber: 'POL-OMNI-2026-9081', vehicleMake: 'Honda', vehicleModel: 'Accord', coverageLimit: 50000, isActive: true },
+      changedFields: [
+        { field: 'policyNumber', oldValue: null, newValue: 'POL-OMNI-2026-9081' },
+        { field: 'coverageLimit', oldValue: null, newValue: 50000 },
+      ],
+    },
+    {
+      id: 'seed-act-002',
+      method: 'PATCH',
+      path: `/api/v1/claims/${claim1.id}`,
+      routePattern: '/api/v1/claims/:id',
+      module: 'CLAIMS',
+      entityType: 'Claim',
+      entityId: claim1.id,
+      action: 'UPDATE_CLAIM',
+      statusCode: 200,
+      success: true,
+      durationMs: 44,
+      userId: adjusterId,
+      username: 'sarah.jenkins',
+      userEmail: 'adjuster.senior@omniclaim.internal',
+      userFullName: 'Sarah Jenkins',
+      userRole: 'CLAIMS_ADJUSTER',
+      isMasterLogin: false,
+      ipAddress: '127.0.0.1',
+      userAgent: 'OmniClaim-Web/2.0',
+      requestBody: { status: 'TRIAGE_PENDING' },
+      oldValues: { status: 'SUBMITTED', version: 0 },
+      newValues: { status: 'TRIAGE_PENDING', version: 1 },
+      changedFields: [
+        { field: 'status', oldValue: 'SUBMITTED', newValue: 'TRIAGE_PENDING' },
+        { field: 'version', oldValue: 0, newValue: 1 },
+      ],
+    },
+    {
+      id: 'seed-act-003',
+      method: 'GET',
+      path: '/api/v1/claims?status=TRIAGE_PENDING',
+      routePattern: '/api/v1/claims',
+      module: 'CLAIMS',
+      entityType: 'Claim',
+      entityId: null,
+      action: 'READ_CLAIMS',
+      statusCode: 200,
+      success: true,
+      durationMs: 19,
+      userId: adjusterId,
+      username: 'sarah.jenkins',
+      userEmail: 'adjuster.senior@omniclaim.internal',
+      userFullName: 'Sarah Jenkins',
+      userRole: 'CLAIMS_ADJUSTER',
+      isMasterLogin: false,
+      ipAddress: '127.0.0.1',
+      userAgent: 'OmniClaim-Web/2.0',
+      queryParams: { status: 'TRIAGE_PENDING' },
+      oldValues: null,
+      newValues: null,
+      changedFields: [],
+    },
+  ];
+
+  for (const act of seedActivityLogs) {
+    await prisma.systemActivityAuditLog.upsert({
+      where: { id: act.id },
+      update: {},
+      create: act as any,
+    });
+  }
+
   return {
     permissions: permissionsData.length,
     roles: rolesData.length,
@@ -819,5 +913,6 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
     policies: policiesData.length,
     claims: 3,
     journals: 2,
+    activityAuditLogs: seedActivityLogs.length,
   };
 }

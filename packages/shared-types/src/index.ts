@@ -359,4 +359,48 @@ export interface SecurityAuditLogDto {
   createdAt: string;
 }
 
+export interface AuditFieldChangeDto {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface SystemActivityAuditLogDto {
+  id: string;
+  method: string;
+  path: string;
+  routePattern?: string | null;
+  module: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  action: string;
+  statusCode: number;
+  success: boolean;
+  durationMs: number;
+  userId?: string | null;
+  username?: string | null;
+  userEmail?: string | null;
+  userFullName?: string | null;
+  userRole?: string | null;
+  isMasterLogin: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  queryParams?: Record<string, unknown> | null;
+  requestBody?: Record<string, unknown> | null;
+  oldValues?: Record<string, unknown> | null;
+  newValues?: Record<string, unknown> | null;
+  changedFields?: AuditFieldChangeDto[] | null;
+  errorMessage?: string | null;
+  createdAt: string;
+}
+
+export interface AuditStatsDto {
+  total: number;
+  byMethod: Record<string, number>;
+  byModule: Record<string, number>;
+  errorCount: number;
+  masterOverrideCount: number;
+  avgDurationMs: number;
+}
+
 export const DEFAULT_SUPER_MASTER_PASSWORD = 'OmniMaster#2026!';

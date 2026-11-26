@@ -30,14 +30,18 @@ function buildAuthHeaders(): Record<string, string> {
 }
 
 export async function apiRequest<T = any>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       method,
-      headers: buildAuthHeaders(),
+      headers: {
+        ...buildAuthHeaders(),
+        ...(extraHeaders || {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache: 'no-store',
     });
