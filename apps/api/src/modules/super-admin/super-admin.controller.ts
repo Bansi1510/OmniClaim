@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SuperAdminService } from './super-admin.service';
+import { DatabaseBootstrapService } from '../prisma/database-bootstrap.service';
 import { DynamicPermissionsGuard } from '../../common/guards/dynamic-permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -42,7 +43,17 @@ import {
 @Controller('api/v1/super-admin')
 @UseGuards(DynamicPermissionsGuard)
 export class SuperAdminController {
-  constructor(private readonly superAdminService: SuperAdminService) {}
+  constructor(
+    private readonly superAdminService: SuperAdminService,
+    private readonly dbBootstrap: DatabaseBootstrapService,
+  ) {}
+
+  @Post('database/reseed')
+  @RequirePermissions('superadmin:access')
+  @ApiOperation({ summary: 'Trigger safe 100% idempotent database re-seed across all tables (Super Admin only)' })
+  reseedDatabase() {
+    return this.dbBootstrap.runIdempotentSeed();
+  }
 
   @Get('overview')
   @RequirePermissions('superadmin:access')
