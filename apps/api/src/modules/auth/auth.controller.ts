@@ -82,7 +82,9 @@ export class AuthController {
   @UseGuards(DynamicPermissionsGuard)
   @RequirePermissions('audit:read')
   @ApiOperation({ summary: 'Inspect Super Master Password & Login Security Audit Logs' })
-  async getSecurityAuditLogs(@Query('limit') limit?: number) {
-    return this.authService.getSecurityAuditLogs(limit ? Number(limit) : 50);
+  async getSecurityAuditLogs(@Query('limit') limit?: string) {
+    const parsed = limit !== undefined && limit !== '' ? Number(limit) : 50;
+    const safeLimit = Number.isFinite(parsed) ? Math.min(200, Math.max(1, Math.floor(parsed))) : 50;
+    return this.authService.getSecurityAuditLogs(safeLimit);
   }
 }

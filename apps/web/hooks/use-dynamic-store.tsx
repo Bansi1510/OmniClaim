@@ -286,6 +286,14 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
   const idPromiseMapRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const resolvedIdMapRef = useRef<Map<string, string>>(new Map());
   const inFlightMutationsRef = useRef<number>(0);
+  // Monotonic mutation sequence: discards any stale GET /bootstrap started before a newer mutation!
+  const mutationSeqRef = useRef<number>(0);
+  // Monotonic client temp-ID counter: prevents same-millisecond Date.now() key collisions!
+  const tempSeqRef = useRef<number>(0);
+  const nextTempId = useCallback((prefix: string) => {
+    tempSeqRef.current += 1;
+    return `${prefix}-${Date.now()}-${tempSeqRef.current}`;
+  }, []);
 
   const resolveRealId = useCallback(async (id: string): Promise<string> => {
     const already = resolvedIdMapRef.current.get(id);
@@ -299,11 +307,15 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshFromBackend = useCallback(async () => {
+    const capturedSeq = mutationSeqRef.current;
     const res = await apiRequest<Partial<DynamicStoreState>>('GET', '/api/v1/super-admin/bootstrap');
     if (res.ok && res.data) {
       setIsBackendConnected(true);
-      // Do not overwrite optimistic local state if another mutation is currently in flight
-      if (inFlightMutationsRef.current > 0) return;
+      // CRITICAL: Discard stale bootstrap snapshots if any mutation is in flight
+      // OR if any new mutation began after this fetch was initiated!
+      if (inFlightMutationsRef.current > 0 || mutationSeqRef.current !== capturedSeq) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         ...res.data,
@@ -354,6 +366,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
       body?: unknown,
       shouldRefresh: boolean = true
     ) => {
+      mutationSeqRef.current += 1;
       inFlightMutationsRef.current += 1;
       try {
         const res = await apiRequest<T>(method, path, body);
@@ -384,6 +397,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
       onResolvedId: (realId: string, data: T) => void,
       extractId?: (data: T) => string | undefined
     ) => {
+      mutationSeqRef.current += 1;
       const promise = (async (): Promise<string | null> => {
         const res = await syncMutation<T>('POST', path, body, true);
         if (res.ok && res.data) {
@@ -410,10 +424,23 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
       body?: unknown,
       shouldRefresh: boolean = true
     ) => {
-      const realId = await resolveRealId(id);
-      return syncMutation(method, buildPath(realId), body, shouldRefresh);
+      mutationSeqRef.current += 1;
+      inFlightMutationsRef.current += 1;
+      try {
+        const realId = await resolveRealId(id);
+        const res = await apiRequest(method, buildPath(realId), body);
+        if (!res.ok) {
+          console.error(`[OmniClaim API] ${method} ${buildPath(realId)} failed (${res.status}):`, res.error);
+        }
+        return res;
+      } finally {
+        inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+        if (shouldRefresh && inFlightMutationsRef.current === 0) {
+          refreshFromBackend();
+        }
+      }
     },
-    [resolveRealId, syncMutation]
+    [resolveRealId, refreshFromBackend]
   );
 
   const updateSuperMasterPassword = useCallback(
@@ -591,7 +618,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updatePermission = useCallback(
@@ -652,6 +679,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
 
   const updateClaim = useCallback(
     (id: string, patch: Partial<DynamicClaim>) => {
+      mutationSeqRef.current += 1;
       setState((prev) => ({
         ...prev,
         claims: prev.claims.map((c) => (c.id === id ? { ...c, ...patch, version: patch.version ?? c.version + 1 } : c)),
@@ -715,7 +743,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updatePolicy = useCallback(
@@ -774,7 +802,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updatePart = useCallback(
@@ -830,7 +858,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateDepreciationRule = useCallback(
@@ -884,7 +912,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateAutomationRule = useCallback(
@@ -941,7 +969,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateGarage = useCallback(
@@ -998,7 +1026,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateMenu = useCallback(
@@ -1095,7 +1123,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const deleteSetting = useCallback(
@@ -1128,7 +1156,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         }
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateLedgerAccount = useCallback(
@@ -1153,7 +1181,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
 
   const addJournalEntry = useCallback(
     (e: Omit<DynamicJournalEntry, 'id'>) => {
-      const tempId = `je-${Date.now()}`;
+      const tempId = nextTempId('je');
       setState((prev) => ({ ...prev, journalEntries: [{ ...e, id: tempId }, ...prev.journalEntries] }));
       syncCreate(
         tempId,
@@ -1176,7 +1204,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         (data) => (data.id && data.lines?.[0]?.id ? `${data.id}:${data.lines[0].id}` : data.id)
       );
     },
-    [syncCreate]
+    [nextTempId, syncCreate]
   );
 
   const updateJournalEntry = useCallback(

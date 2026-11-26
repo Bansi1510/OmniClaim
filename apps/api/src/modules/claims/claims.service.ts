@@ -186,7 +186,9 @@ export class ClaimsService {
     skip?: number;
     take?: number;
   }) {
-    const { status, search, skip = 0, take = 20 } = params;
+    const { status, search } = params;
+    const skip = Number.isFinite(Number(params.skip)) ? Math.max(0, Math.floor(Number(params.skip))) : 0;
+    const take = Number.isFinite(Number(params.take)) ? Math.min(100, Math.max(1, Math.floor(Number(params.take)))) : 20;
 
     const where: any = {};
     if (status) where.status = status;
@@ -355,9 +357,27 @@ export class ClaimsService {
   }
 
   async deleteClaim(claimId: string) {
-    const existing = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    const existing = await this.prisma.claim.findUnique({
+      where: { id: claimId },
+      include: { reconciliation: { select: { id: true } } },
+    });
     if (!existing) throw new NotFoundException(`Claim ${claimId} not found.`);
-    await this.prisma.claim.delete({ where: { id: claimId } });
+
+    await this.prisma.$transaction(async (tx) => {
+      // Detach any financial ledger journal entries to preserve double-entry history safely
+      await tx.ledgerJournalEntry.updateMany({
+        where: { claimId },
+        data: { claimId: null },
+      });
+      // Remove reconciled line items first so BillLineItem cascades cleanly
+      if (existing.reconciliation?.id) {
+        await tx.reconciledLineItem.deleteMany({
+          where: { summaryId: existing.reconciliation.id },
+        });
+      }
+      await tx.claim.delete({ where: { id: claimId } });
+    });
+
     return { success: true, deletedClaimId: claimId, claimNumber: existing.claimNumber };
   }
 }

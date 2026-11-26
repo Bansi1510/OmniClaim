@@ -15,9 +15,9 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError(null);
-    const res = login(identifier, password);
+    const res = await login(identifier, password);
     if (!res.success) {
       setError(res.error || 'Authentication failed.');
     }

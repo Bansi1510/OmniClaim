@@ -519,6 +519,12 @@ export class SuperAdminService {
   }
 
   async deletePolicy(id: string) {
+    const linkedClaims = await this.prisma.claim.count({ where: { policyId: id } });
+    if (linkedClaims > 0) {
+      throw new BadRequestException(
+        `Cannot delete policy while ${linkedClaims} claim(s) reference it. Delete or reassign those claims first.`,
+      );
+    }
     await this.prisma.policy.delete({ where: { id } });
     return { success: true, deletedId: id };
   }
@@ -724,7 +730,26 @@ export class SuperAdminService {
   }
 
   async deleteUser(id: string) {
-    await this.prisma.user.delete({ where: { id } });
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`User ${id} not found.`);
+    if (existing.username === 'superadmin') {
+      throw new BadRequestException('Root superadmin account is protected and cannot be deleted.');
+    }
+
+    const fallbackSuper = await this.prisma.user.findFirst({
+      where: { isSuperAdmin: true, id: { not: id } },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.claim.updateMany({ where: { adjusterId: id }, data: { adjusterId: null } });
+      await tx.claimLock.deleteMany({ where: { userId: id } });
+      if (fallbackSuper) {
+        await tx.claimAuditLog.updateMany({ where: { userId: id }, data: { userId: fallbackSuper.id } });
+        await tx.claimTransitionLog.updateMany({ where: { triggeredById: id }, data: { triggeredById: fallbackSuper.id } });
+      }
+      await tx.user.delete({ where: { id } });
+    });
+
     await this.redis.del(`user_permissions:${id}`);
     return { success: true, deletedId: id };
   }
@@ -745,6 +770,12 @@ export class SuperAdminService {
   }
 
   async deleteLedgerAccount(id: string) {
+    const linkedLines = await this.prisma.ledgerTransactionLine.count({ where: { accountId: id } });
+    if (linkedLines > 0) {
+      throw new BadRequestException(
+        `Cannot delete ledger account with ${linkedLines} posted journal transaction line(s).`,
+      );
+    }
     await this.prisma.ledgerAccount.delete({ where: { id } });
     return { success: true, deletedId: id };
   }

@@ -287,6 +287,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [session, persistSession]);
 
   const exitMasterSession = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
     const realSuper = store.users.find((u) => u.username === 'superadmin' || u.isSuperAdmin);
     persistSession({
       ...DEFAULT_SESSION,

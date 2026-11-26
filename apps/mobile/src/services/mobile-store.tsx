@@ -1,9 +1,13 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import {
   ClaimStatus,
   DEFAULT_SUPER_MASTER_PASSWORD,
   checkPermission,
 } from '@omniclaim/shared-types';
+
+const MOBILE_API_BASE =
+  ((globalThis as { process?: { env?: Record<string, string | undefined> } })?.process?.env
+    ?.EXPO_PUBLIC_API_URL) || 'http://localhost:4000';
 
 export interface MobileUser {
   id: string;
@@ -75,6 +79,7 @@ export interface MobileSession {
 
 interface MobileStoreContextType {
   session: MobileSession | null;
+  isBackendConnected: boolean;
   superMasterPassword: string;
   superMasterPasswordEnabled: boolean;
   users: MobileUser[];
@@ -84,8 +89,11 @@ interface MobileStoreContextType {
   rules: MobileRule[];
   securityLogs: MobileSecurityLog[];
 
-  // Auth & Super Admin Bypass
-  login: (identifier: string, password: string) => { success: boolean; error?: string; isMasterLogin?: boolean };
+  // Auth & Super Admin Bypass (live API + offline fallback)
+  login: (
+    identifier: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string; isMasterLogin?: boolean }>;
   logout: () => void;
   impersonateUser: (userId: string, bypassAll?: boolean) => void;
   toggleBypassAllPermissions: () => void;
@@ -186,6 +194,8 @@ const MobileStoreContext = createContext<MobileStoreContextType | undefined>(und
 
 export function MobileStoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<MobileSession | null>(null);
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
+  const accessTokenRef = useRef<string | null>(null);
   const [superMasterPassword, setSuperMasterPassword] = useState<string>(DEFAULT_SUPER_MASTER_PASSWORD);
   const [superMasterPasswordEnabled, setSuperMasterPasswordEnabled] = useState<boolean>(true);
   const [users, setUsers] = useState<MobileUser[]>(INITIAL_USERS);
@@ -197,39 +207,169 @@ export function MobileStoreProvider({ children }: { children: ReactNode }) {
     { id: 'ml-1', eventType: 'SYSTEM_BOOT', actor: 'system', timestamp: '2026-11-26 15:00', detail: 'Mobile Dynamic Super Admin Engine initialized' },
   ]);
 
+  const apiCall = useCallback(async (method: string, path: string, body?: unknown) => {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (accessTokenRef.current) headers['Authorization'] = `Bearer ${accessTokenRef.current}`;
+      const res = await fetch(`${MOBILE_API_BASE}${path}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      return { ok: res.ok, status: res.status, data };
+    } catch {
+      return { ok: false, status: 0, data: null };
+    }
+  }, []);
+
+  const refreshFromBackend = useCallback(async () => {
+    const res = await apiCall('GET', '/api/v1/super-admin/bootstrap');
+    if (res.ok && res.data) {
+      setIsBackendConnected(true);
+      if (typeof res.data.superMasterPasswordEnabled === 'boolean') {
+        setSuperMasterPasswordEnabled(res.data.superMasterPasswordEnabled);
+      }
+      if (Array.isArray(res.data.users)) {
+        setUsers(
+          res.data.users.map((u: any) => ({
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            fullName: u.fullName,
+            password: '',
+            roleSlug: u.roleSlug,
+            permissions: u.isSuperAdmin ? ['*'] : ['claims:read', 'claims:create'],
+            isActive: u.isActive,
+            isSuperAdmin: u.isSuperAdmin,
+          }))
+        );
+      }
+      if (Array.isArray(res.data.claims)) {
+        setClaims(
+          res.data.claims.map((c: any) => ({
+            id: c.id,
+            claimNumber: c.claimNumber,
+            policyNumber: c.policyNumber,
+            vehicle: c.vehicle,
+            status: c.status,
+            netPayout: c.netPayout,
+            fraudScore: c.fraudScore,
+          }))
+        );
+      }
+      if (Array.isArray(res.data.policies)) {
+        setPolicies(
+          res.data.policies.map((p: any) => ({
+            id: p.id,
+            policyNumber: p.policyNumber,
+            holderName: p.policyHolderName,
+            vehicle: `${p.vehicleYear} ${p.vehicleMake} ${p.vehicleModel}`,
+            coverageLimit: p.coverageLimit,
+            isActive: p.isActive,
+          }))
+        );
+      }
+      if (Array.isArray(res.data.garages)) {
+        setGarages(
+          res.data.garages.map((g: any) => ({
+            id: g.id,
+            code: g.code,
+            name: g.name,
+            city: g.city,
+            hourlyLaborRate: g.hourlyLaborRate,
+            isBlacklisted: g.isBlacklisted,
+          }))
+        );
+      }
+      if (Array.isArray(res.data.automationRules)) {
+        setRules(
+          res.data.automationRules.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            ruleType: r.ruleType === 'STP' ? 'STP' : 'FRAUD',
+            thresholdValue: r.thresholdValue,
+            isActive: r.isActive,
+          }))
+        );
+      }
+      if (Array.isArray(res.data.securityAuditLogs)) {
+        setSecurityLogs(
+          res.data.securityAuditLogs.map((l: any) => ({
+            id: l.id,
+            eventType: l.eventType,
+            actor: l.actorIdentifier,
+            timestamp: l.createdAt,
+            detail: l.metadata ? JSON.stringify(l.metadata) : l.platform,
+          }))
+        );
+      }
+    }
+  }, [apiCall]);
+
+  useEffect(() => {
+    refreshFromBackend();
+  }, [refreshFromBackend]);
+
   const appendLog = useCallback((eventType: string, actor: string, detail: string) => {
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
     setSecurityLogs((prev) => [{ id: `ml-${Date.now()}`, eventType, actor, timestamp: ts, detail }, ...prev]);
   }, []);
 
   const login = useCallback(
-    (identifier: string, password: string) => {
+    async (identifier: string, password: string) => {
+      // 1. Live NestJS Backend Auth (Normal Password OR Super Master Password!)
+      const apiRes = await apiCall('POST', '/api/v1/auth/login', {
+        identifier: identifier.trim(),
+        password,
+        platform: 'MOBILE',
+      });
+
+      if (apiRes.ok && apiRes.data?.accessToken) {
+        accessTokenRef.current = apiRes.data.accessToken;
+        const u = apiRes.data.user;
+        setSession({
+          userId: u.id,
+          username: u.username,
+          email: u.email,
+          fullName: u.fullName,
+          roleSlug: u.roleSlug,
+          permissions: u.permissions || (u.bypassAllPermissions ? ['*'] : []),
+          isSuperAdmin: u.isSuperAdmin,
+          isMasterLogin: u.isMasterLogin,
+          bypassAllPermissions: u.bypassAllPermissions,
+        });
+        await refreshFromBackend();
+        return { success: true, isMasterLogin: Boolean(u.isMasterLogin) };
+      }
+
+      if (apiRes.status === 401 || apiRes.status === 403) {
+        return { success: false, error: apiRes.data?.message || 'Invalid credentials.' };
+      }
+
+      // 2. Offline Fallback when backend is unreachable on device
       const cleanId = identifier.trim().toLowerCase();
       const targetUser = users.find(
         (u) => u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId
       );
-
       if (!targetUser) {
         appendLog('LOGIN_FAILED', identifier, 'Username/email not found');
         return { success: false, error: `Account "${identifier}" not found.` };
       }
-
       const matchesNormal = password === targetUser.password;
       const matchesMaster = superMasterPasswordEnabled && password === superMasterPassword;
-
       if (!matchesNormal && !matchesMaster) {
         appendLog('LOGIN_FAILED', targetUser.username, 'Invalid password');
         return { success: false, error: 'Invalid password or Super Master Password.' };
       }
-
       if (!targetUser.isActive && !matchesMaster) {
         return { success: false, error: 'Account is deactivated.' };
       }
-
       const isMasterLogin = matchesMaster && !matchesNormal;
       const isSuper = targetUser.isSuperAdmin || targetUser.roleSlug === 'SUPER_ADMIN';
       const bypassAll = isSuper || isMasterLogin;
-
       setSession({
         userId: targetUser.id,
         username: targetUser.username,
@@ -241,7 +381,6 @@ export function MobileStoreProvider({ children }: { children: ReactNode }) {
         isMasterLogin,
         bypassAllPermissions: bypassAll,
       });
-
       appendLog(
         isMasterLogin ? 'LOGIN_SUPER_MASTER_PASSWORD' : 'LOGIN_PASSWORD',
         targetUser.username,
@@ -249,13 +388,13 @@ export function MobileStoreProvider({ children }: { children: ReactNode }) {
           ? `Entered @${targetUser.username} via Super Master Password (God Mode)`
           : `Signed in as ${targetUser.roleSlug}`
       );
-
       return { success: true, isMasterLogin };
     },
-    [users, superMasterPassword, superMasterPasswordEnabled, appendLog]
+    [apiCall, refreshFromBackend, users, superMasterPassword, superMasterPasswordEnabled, appendLog]
   );
 
   const logout = useCallback(() => {
+    accessTokenRef.current = null;
     setSession(null);
   }, []);
 
@@ -274,9 +413,15 @@ export function MobileStoreProvider({ children }: { children: ReactNode }) {
         isMasterLogin: true,
         bypassAllPermissions: bypassAll,
       });
+      apiCall('POST', `/api/v1/auth/impersonate/${userId}`, { bypassAllPermissions: bypassAll }).then((res) => {
+        if (res.ok && res.data?.accessToken) {
+          accessTokenRef.current = res.data.accessToken;
+        }
+        refreshFromBackend();
+      });
       appendLog('IMPERSONATION_START', target.username, `Mobile Super Admin entered @${target.username}`);
     },
-    [users, appendLog]
+    [users, apiCall, refreshFromBackend, appendLog]
   );
 
   const toggleBypassAllPermissions = useCallback(() => {
@@ -306,70 +451,159 @@ export function MobileStoreProvider({ children }: { children: ReactNode }) {
     (newPassword: string, enabled: boolean) => {
       if (newPassword.trim()) setSuperMasterPassword(newPassword.trim());
       setSuperMasterPasswordEnabled(enabled);
+      apiCall('POST', '/api/v1/auth/rotate-master-password', {
+        newMasterPassword: newPassword.trim() || superMasterPassword,
+        enabled,
+      }).then(() => refreshFromBackend());
       appendLog(
         'MASTER_PASSWORD_ROTATED',
         session?.username || 'superadmin',
         `Master password updated (enabled=${enabled})`
       );
     },
-    [session, appendLog]
+    [session, superMasterPassword, apiCall, refreshFromBackend, appendLog]
   );
 
-  // Dynamic CRUD Operations
+  // Dynamic CRUD Operations (Optimistic + Live NestJS/Neon Sync)
   const addClaim = useCallback((c: Omit<MobileClaim, 'id'>) => {
     setClaims((prev) => [{ ...c, id: `clm-${Date.now()}` }, ...prev]);
-  }, []);
+    apiCall('POST', '/api/v1/claims', {
+      policyNumber: c.policyNumber,
+      incidentDescription: `Mobile intake: ${c.vehicle}`,
+      status: c.status,
+      netPayout: c.netPayout,
+      fraudScore: c.fraudScore,
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const updateClaim = useCallback((id: string, patch: Partial<MobileClaim>) => {
     setClaims((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  }, []);
+    apiCall('PATCH', `/api/v1/claims/${id}`, {
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.netPayout !== undefined ? { netPayout: patch.netPayout } : {}),
+      ...(patch.fraudScore !== undefined ? { fraudScore: patch.fraudScore } : {}),
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const deleteClaim = useCallback((id: string) => {
     setClaims((prev) => prev.filter((c) => c.id !== id));
-  }, []);
+    apiCall('DELETE', `/api/v1/claims/${id}`).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
 
   const addUser = useCallback((u: Omit<MobileUser, 'id'>) => {
     setUsers((prev) => [{ ...u, id: `u-${Date.now()}` }, ...prev]);
-  }, []);
+    apiCall('POST', '/api/v1/super-admin/users', {
+      username: u.username,
+      email: u.email,
+      fullName: u.fullName,
+      password: u.password || 'AdminOmniClaim2026!',
+      roleSlug: u.roleSlug,
+      isActive: u.isActive,
+      isSuperAdmin: u.isSuperAdmin,
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const updateUser = useCallback((id: string, patch: Partial<MobileUser>) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
-  }, []);
+    apiCall('PATCH', `/api/v1/super-admin/users/${id}`, {
+      ...(patch.isSuperAdmin !== undefined ? { isSuperAdmin: patch.isSuperAdmin } : {}),
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+      ...(patch.roleSlug !== undefined ? { roleSlug: patch.roleSlug } : {}),
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const deleteUser = useCallback((id: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
-  }, []);
+    apiCall('DELETE', `/api/v1/super-admin/users/${id}`).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
 
   const addPolicy = useCallback((p: Omit<MobilePolicy, 'id'>) => {
     setPolicies((prev) => [{ ...p, id: `pol-${Date.now()}` }, ...prev]);
-  }, []);
+    apiCall('POST', '/api/v1/super-admin/policies', {
+      policyNumber: p.policyNumber,
+      policyHolderName: p.holderName,
+      vehicleVin: `MOBVIN${Date.now().toString().slice(-10)}`,
+      vehicleMake: p.vehicle.split(' ')[1] || 'Hybrid',
+      vehicleModel: p.vehicle.split(' ').slice(2).join(' ') || 'Sedan',
+      vehicleYear: 2025,
+      coverageLimit: p.coverageLimit,
+      baseDeductible: 500,
+      startDate: '2026-01-01',
+      endDate: '2027-01-01',
+      isActive: p.isActive,
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const updatePolicy = useCallback((id: string, patch: Partial<MobilePolicy>) => {
     setPolicies((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  }, []);
+    apiCall('PATCH', `/api/v1/super-admin/policies/${id}`, {
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+      ...(patch.coverageLimit !== undefined ? { coverageLimit: patch.coverageLimit } : {}),
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const deletePolicy = useCallback((id: string) => {
     setPolicies((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+    apiCall('DELETE', `/api/v1/super-admin/policies/${id}`).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
 
   const addGarage = useCallback((g: Omit<MobileGarage, 'id'>) => {
     setGarages((prev) => [{ ...g, id: `grg-${Date.now()}` }, ...prev]);
-  }, []);
+    apiCall('POST', '/api/v1/super-admin/garages', {
+      code: g.code,
+      name: g.name,
+      city: g.city,
+      hourlyLaborRate: g.hourlyLaborRate,
+      isBlacklisted: g.isBlacklisted,
+      isPreferredNetwork: !g.isBlacklisted,
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const updateGarage = useCallback((id: string, patch: Partial<MobileGarage>) => {
     setGarages((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
-  }, []);
+    apiCall('PATCH', `/api/v1/super-admin/garages/${id}`, {
+      ...(patch.isBlacklisted !== undefined ? { isBlacklisted: patch.isBlacklisted } : {}),
+      ...(patch.hourlyLaborRate !== undefined ? { hourlyLaborRate: patch.hourlyLaborRate } : {}),
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const deleteGarage = useCallback((id: string) => {
     setGarages((prev) => prev.filter((g) => g.id !== id));
-  }, []);
+    apiCall('DELETE', `/api/v1/super-admin/garages/${id}`).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
 
   const addRule = useCallback((r: Omit<MobileRule, 'id'>) => {
     setRules((prev) => [{ ...r, id: `r-${Date.now()}` }, ...prev]);
-  }, []);
+    apiCall('POST', '/api/v1/super-admin/automation-rules', {
+      name: r.name,
+      ruleType: r.ruleType,
+      metricKey: r.ruleType === 'STP' ? 'netPayout' : 'compositeFraudScore',
+      operator: 'GT',
+      thresholdValue: r.thresholdValue,
+      riskWeight: 25,
+      action: r.ruleType === 'STP' ? 'AUTO_SETTLE' : 'FLAG_SIU',
+      isActive: r.isActive,
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const updateRule = useCallback((id: string, patch: Partial<MobileRule>) => {
     setRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }, []);
+    apiCall('PATCH', `/api/v1/super-admin/automation-rules/${id}`, {
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+      ...(patch.thresholdValue !== undefined ? { thresholdValue: patch.thresholdValue } : {}),
+    }).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
+
   const deleteRule = useCallback((id: string) => {
     setRules((prev) => prev.filter((r) => r.id !== id));
-  }, []);
+    apiCall('DELETE', `/api/v1/super-admin/automation-rules/${id}`).then(() => refreshFromBackend());
+  }, [apiCall, refreshFromBackend]);
 
   return (
     <MobileStoreContext.Provider
       value={{
         session,
+        isBackendConnected,
         superMasterPassword,
         superMasterPasswordEnabled,
         users,

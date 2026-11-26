@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { Download, Plus, CheckCircle2, AlertCircle, Edit2, Trash2 } from 'lucide-react';
 import { Can } from '@/components/auth/can';
@@ -19,6 +19,15 @@ export default function FinancialLedgerPage() {
   } = useDynamicStore();
 
   const [activeTab, setActiveTab] = useState<'journals' | 'accounts'>('journals');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'accounts') {
+        setActiveTab('accounts');
+      }
+    }
+  }, []);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DynamicJournalEntry | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

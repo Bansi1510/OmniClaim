@@ -95,10 +95,17 @@ export class ClaimsController {
   async listClaims(
     @Query('status') status?: ClaimStatus,
     @Query('search') search?: string,
-    @Query('skip') skip?: number,
-    @Query('take') take?: number,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
   ) {
-    return this.claimsService.listClaims({ status, search, skip, take });
+    const parsedSkip = skip !== undefined && skip !== '' ? Number(skip) : undefined;
+    const parsedTake = take !== undefined && take !== '' ? Number(take) : undefined;
+    return this.claimsService.listClaims({
+      status,
+      search,
+      skip: Number.isFinite(parsedSkip) ? parsedSkip : undefined,
+      take: Number.isFinite(parsedTake) ? parsedTake : undefined,
+    });
   }
 
   @Get(':id')

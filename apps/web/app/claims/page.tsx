@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { CLAIM_STATUS_THEME, FRAUD_RISK_THEME } from '@/lib/theme-constants';
 import { ClaimStatus, FraudRiskTier } from '@omniclaim/shared-types';
@@ -29,6 +29,26 @@ export default function ClaimsQueuePage() {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
+
+  const hasAutoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !hasAutoOpenedRef.current) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'new') {
+        hasAutoOpenedRef.current = true;
+        const defaultPol = policies[0];
+        setEditingClaim(null);
+        setPolicyNumber(defaultPol?.policyNumber || 'POL-OMNI-2026-9081');
+        setVehicle(
+          defaultPol
+            ? `${defaultPol.vehicleYear} ${defaultPol.vehicleMake} ${defaultPol.vehicleModel} (VIN: ${defaultPol.vehicleVin})`
+            : '2024 Honda Civic Sedan'
+        );
+        setShowModal(true);
+      }
+    }
+  }, [policies]);
 
   const openAdd = () => {
     setEditingClaim(null);
