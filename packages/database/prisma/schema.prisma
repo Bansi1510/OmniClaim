@@ -49,17 +49,22 @@ model RolePermission {
 
 model User {
   id             String               @id @default(uuid())
+  username       String?              @unique // Allows login by username OR email
   email          String               @unique
   passwordHash   String
   fullName       String
   isActive       Boolean              @default(true)
+  isSuperAdmin   Boolean              @default(false) // Skips all RBAC permissions unconditionally
   roles          UserRole[]
   assignedClaims Claim[]              @relation("AdjusterClaims")
   transitionLogs ClaimTransitionLog[]
   auditLogs      ClaimAuditLog[]
   activeLocks    ClaimLock[]
+  securityAudits SecurityAuditLog[]   @relation("SecurityAuditTargetUser")
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
+
+  @@index([username])
 }
 
 model UserRole {
@@ -468,4 +473,154 @@ model SettlementVoucher {
   qrHash        String   // Cryptographic SHA256 verification hash
   payoutMethod  String   // "ACH", "UPI", "STRIPE", "DIRECT_GARAGE"
   generatedAt   DateTime @default(now())
+}
+
+
+// ==========================================
+// 6. DYNAMIC SUPER ADMIN & ENTERPRISE MASTER DOMAIN
+// ==========================================
+
+enum SettingValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  SECRET
+}
+
+enum AutomationRuleType {
+  STP
+  FRAUD
+  WORKFLOW
+}
+
+enum AuthAuditEventType {
+  LOGIN_PASSWORD
+  LOGIN_SUPER_MASTER_PASSWORD
+  IMPERSONATION_START
+  MASTER_PASSWORD_ROTATED
+  SUPER_ADMIN_OVERRIDE
+  LOGIN_FAILED
+}
+
+model SystemSetting {
+  id          String           @id @default(uuid())
+  key         String           @unique // e.g. "SUPER_MASTER_PASSWORD_HASH", "STP_MAX_PAYOUT", "FRAUD_CRITICAL_SCORE"
+  label       String
+  value       String
+  valueType   SettingValueType @default(STRING)
+  category    String           // "SECURITY", "ACTUARIAL", "STP", "FRAUD", "BRANDING", "GENERAL"
+  description String?
+  isEditable  Boolean          @default(true)
+  updatedBy   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([category])
+}
+
+model SecurityAuditLog {
+  id              String             @id @default(uuid())
+  eventType       AuthAuditEventType
+  targetUserId    String?
+  targetUser      User?              @relation("SecurityAuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  actorIdentifier String             // Email/username entered or super admin actor
+  platform        String             @default("WEB") // "WEB" | "MOBILE" | "API"
+  ipAddress       String?
+  userAgent       String?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+
+  @@index([eventType])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model VehiclePartCatalog {
+  id                      String          @id @default(uuid())
+  partCode                String          @unique // e.g. "PRT-BUMP-FRT-01"
+  partName                String
+  partType                VehiclePartType
+  materialType            MaterialType
+  oemBasePrice            Decimal         @db.Decimal(12, 2)
+  aftermarketPrice        Decimal         @db.Decimal(12, 2)
+  defaultLaborHours       Float           @default(1.5)
+  laborRatePerHour        Decimal         @db.Decimal(10, 2) @default(90.00)
+  depreciationOverridePct Float?          // Optional custom override %
+  isActive                Boolean         @default(true)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@index([partType])
+  @@index([materialType])
+}
+
+model DepreciationRule {
+  id                  String       @id @default(uuid())
+  name                String
+  materialType        MaterialType
+  minVehicleAgeYears  Int          @default(0)
+  maxVehicleAgeYears  Int          @default(100)
+  depreciationPercent Float        // 0.0 to 100.0
+  priority            Int          @default(10)
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([materialType, isActive])
+}
+
+model AutomationRule {
+  id             String             @id @default(uuid())
+  name           String
+  ruleType       AutomationRuleType // STP, FRAUD, WORKFLOW
+  metricKey      String             // e.g. "netPayout", "gpsDistanceMeters", "compositeFraudScore"
+  operator       String             // "LT", "LTE", "GT", "GTE", "EQ", "NEQ"
+  thresholdValue String             // Numeric or string threshold
+  riskWeight     Float              @default(0)
+  action         String             // e.g. "AUTO_SETTLE", "FLAG_SIU", "ADD_RISK_SCORE", "REQUIRE_MANAGER"
+  description    String?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([ruleType, isActive])
+}
+
+model RepairGarage {
+  id                 String   @id @default(uuid())
+  code               String   @unique // e.g. "GRG-NYC-001"
+  name               String
+  city               String
+  taxId              String?
+  hourlyLaborRate    Decimal  @db.Decimal(10, 2) @default(95.00)
+  rating             Float    @default(4.5)
+  isPreferredNetwork Boolean  @default(true)
+  isBlacklisted      Boolean  @default(false)
+  phone              String?
+  email              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([isPreferredNetwork])
+  @@index([isBlacklisted])
+}
+
+model DynamicMenuItem {
+  id                 String   @id @default(uuid())
+  menuKey            String   @unique
+  label              String
+  navLink            String?
+  icon               String   @default("Circle")
+  parentKey          String?
+  requiredPermission String?
+  badgeName          String?
+  badgeColor         String?
+  sortOrder          Int      @default(0)
+  isVisible          Boolean  @default(true)
+  isSystem           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([parentKey, sortOrder])
 }

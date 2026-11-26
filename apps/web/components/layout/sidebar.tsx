@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useDynamicStore } from '@/hooks/use-dynamic-store';
 import {
   FileText,
   ShieldAlert,
@@ -14,179 +15,139 @@ import {
   ChevronRight,
   Circle,
   Zap,
+  Crown,
+  Layers,
+  Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 
-interface SidebarMenuItem {
-  id: string;
-  label: string;
-  icon: any;
-  requiredPermission?: string;
-  navLink?: string;
-  subItems?: Array<{
-    id: string;
-    label: string;
-    navLink: string;
-    requiredPermission?: string;
-    badgeName?: string;
-    badgeColor?: string;
-  }>;
-}
-
-// Master Menu Navigation declaration matching LayoutMenuData.jsx from College ERP
-const MASTER_MENU_ITEMS: SidebarMenuItem[] = [
-  {
-    id: 'claims-ops',
-    label: 'Claims Operations',
-    icon: FileText,
-    requiredPermission: 'claims:read',
-    subItems: [
-      {
-        id: 'triage-queue',
-        label: 'Triage Queue',
-        navLink: '/claims',
-        requiredPermission: 'claims:read',
-      },
-      {
-        id: 'initiate-claim',
-        label: 'Submit New Claim',
-        navLink: '/claims',
-        requiredPermission: 'claims:create',
-        badgeName: 'Intake',
-        badgeColor: 'bg-primary/20 text-primary',
-      },
-    ],
-  },
-  {
-    id: 'fraud-siu',
-    label: 'Fraud & SIU Unit',
-    icon: ShieldAlert,
-    requiredPermission: 'fraud:read',
-    subItems: [
-      {
-        id: 'fraud-scorecards',
-        label: 'Scorecard Audits',
-        navLink: '/claims',
-        requiredPermission: 'fraud:read',
-      },
-      {
-        id: 'pgvector-search',
-        label: 'pgvector Similarity',
-        navLink: '/claims',
-        requiredPermission: 'fraud:read',
-        badgeName: 'Vector',
-        badgeColor: 'bg-teal-500/20 text-teal-400',
-      },
-    ],
-  },
-  {
-    id: 'ledger-accounting',
-    label: 'Financial Ledger',
-    icon: BookOpen,
-    requiredPermission: 'ledger:read',
-    subItems: [
-      {
-        id: 'general-journals',
-        label: 'General Journals',
-        navLink: '/ledger',
-        requiredPermission: 'ledger:read',
-      },
-      {
-        id: 'payout-vouchers',
-        label: 'Settlement Vouchers',
-        navLink: '/ledger',
-        requiredPermission: 'ledger:read',
-      },
-    ],
-  },
-  {
-    id: 'setup-rbac',
-    label: 'Setup & Access Control',
-    icon: Settings,
-    requiredPermission: 'rbac:roles_create',
-    subItems: [
-      {
-        id: 'roles-rights',
-        label: 'Roles & Rights Setup',
-        navLink: '/admin/roles',
-        requiredPermission: 'rbac:roles_create',
-      },
-      {
-        id: 'permission-matrix',
-        label: 'Permission Matrix Grid',
-        navLink: '/admin/rbac',
-        requiredPermission: 'rbac:roles_create',
-      },
-      {
-        id: 'user-access',
-        label: 'User Role Assignment',
-        navLink: '/admin/users',
-        requiredPermission: 'rbac:users_assign',
-      },
-    ],
-  },
-  {
-    id: 'audit-compliance',
-    label: 'Audit & Compliance',
-    icon: History,
-    requiredPermission: 'audit:read',
-    subItems: [
-      {
-        id: 'field-audit',
-        label: 'Field Modification Logs',
-        navLink: '/audit',
-        requiredPermission: 'audit:read',
-      },
-    ],
-  },
-];
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  FileText,
+  ShieldAlert,
+  BookOpen,
+  Settings,
+  History,
+  Circle,
+  Crown,
+  Layers,
+  Wrench,
+  ShieldCheck,
+  Zap,
+};
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { canView } = usePermissions();
+  const { canView, isSystemAdmin, isMasterLogin, bypassAllPermissions } = usePermissions();
+  const { menus } = useDynamicStore();
 
   const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({
     'claims-ops': true,
     'setup-rbac': true,
     'fraud-siu': true,
+    'ledger-accounting': true,
+    'audit-compliance': true,
   });
 
-  const toggleSubMenu = (id: string) => {
-    setOpenSubMenus((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleSubMenu = (key: string) => {
+    setOpenSubMenus((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Build hierarchical dynamic menu tree from live store (respecting sortOrder & isVisible)
+  const menuTree = useMemo(() => {
+    const visibleMenus = menus.filter((m) => m.isVisible);
+    const parents = visibleMenus
+      .filter((m) => !m.parentKey)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+
+    return parents.map((parent) => ({
+      ...parent,
+      subItems: visibleMenus
+        .filter((child) => child.parentKey === parent.menuKey)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    }));
+  }, [menus]);
+
+  const showSuperAdminShortcut = isSystemAdmin || isMasterLogin || bypassAllPermissions;
 
   return (
     <aside className="w-64 border-r border-border/60 bg-card/60 flex flex-col shrink-0 min-h-[calc(100vh-3.5rem)] select-none">
-      {/* Sidebar Navigation Section */}
+      {/* Super Admin Command Center Quick Card (Skips ALL permissions) */}
+      {showSuperAdminShortcut && (
+        <div className="p-3 border-b border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent">
+          <Link
+            href="/super-admin"
+            className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-bold transition border ${
+              pathname === '/super-admin'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                : 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Crown className="h-4 w-4" />
+              <span>Super Admin Center</span>
+            </div>
+            <span className="rounded bg-black/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wider">
+              ALL ACCESS
+            </span>
+          </Link>
+        </div>
+      )}
+
+      {/* Dynamic Navigation Section */}
       <div className="p-4 flex-1 space-y-6 overflow-y-auto">
         <div>
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mb-2">
             Main Navigation
           </span>
           <nav className="space-y-1">
-            {MASTER_MENU_ITEMS.map((menu) => {
-              // 1. Check if user is authorized to view this master menu section
+            {menuTree.map((menu) => {
+              // 1. Check if user is authorized to view this master menu section (Super Admin skips all checks!)
               if (menu.requiredPermission && !canView(menu.requiredPermission)) {
-                return null; // Menu is completely hidden when user lacks permission!
+                return null;
               }
 
-              const IconComponent = menu.icon;
+              const IconComponent = ICON_MAP[menu.icon] || Layers;
               const hasSubItems = menu.subItems && menu.subItems.length > 0;
-              const isOpen = openSubMenus[menu.id] ?? false;
+              const isOpen = openSubMenus[menu.menuKey] ?? true;
 
-              // Filter permitted subitems
               const permittedSubItems = menu.subItems?.filter((sub) =>
                 sub.requiredPermission ? canView(sub.requiredPermission) : true
               );
 
-              // If parent has subitems but all are hidden by RBAC, hide parent
               if (hasSubItems && (!permittedSubItems || permittedSubItems.length === 0)) {
                 return null;
+              }
+
+              // Direct leaf link if no subitems
+              if (!hasSubItems && menu.navLink) {
+                const isActive = pathname === menu.navLink;
+                return (
+                  <Link
+                    key={menu.id}
+                    href={menu.navLink}
+                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                      isActive
+                        ? 'bg-primary/15 text-primary font-bold'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <IconComponent className="h-4 w-4 text-primary" />
+                      <span>{menu.label}</span>
+                    </div>
+                    {menu.badgeName && (
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${menu.badgeColor || 'bg-muted text-muted-foreground'}`}>
+                        {menu.badgeName}
+                      </span>
+                    )}
+                  </Link>
+                );
               }
 
               return (
                 <div key={menu.id} className="space-y-0.5">
                   <button
-                    onClick={() => toggleSubMenu(menu.id)}
+                    onClick={() => toggleSubMenu(menu.menuKey)}
                     className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition"
                   >
                     <div className="flex items-center gap-2.5">
@@ -204,15 +165,15 @@ export function Sidebar() {
                     )}
                   </button>
 
-                  {/* Render SubItems matching navigationIndex.jsx renderSubMenu */}
                   {hasSubItems && isOpen && (
                     <div className="pl-6 space-y-1 pt-1 border-l border-border/40 ml-4">
                       {permittedSubItems?.map((sub) => {
-                        const isActive = pathname === sub.navLink;
+                        const baseLink = (sub.navLink || '/claims').split('?')[0];
+                        const isActive = pathname === baseLink && !(sub.navLink || '').includes('?');
                         return (
                           <Link
                             key={sub.id}
-                            href={sub.navLink}
+                            href={sub.navLink || '/claims'}
                             className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
                               isActive
                                 ? 'bg-primary/10 text-primary font-bold'
@@ -220,12 +181,18 @@ export function Sidebar() {
                             }`}
                           >
                             <div className="flex items-center gap-2">
-                              <Circle className={`h-1.5 w-1.5 ${isActive ? 'fill-primary text-primary' : 'text-muted-foreground/60'}`} />
+                              <Circle
+                                className={`h-1.5 w-1.5 ${
+                                  isActive ? 'fill-primary text-primary' : 'text-muted-foreground/60'
+                                }`}
+                              />
                               <span>{sub.label}</span>
                             </div>
                             {sub.badgeName && (
                               <span
-                                className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${sub.badgeColor || 'bg-muted text-muted-foreground'}`}
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                                  sub.badgeColor || 'bg-muted text-muted-foreground'
+                                }`}
                               >
                                 {sub.badgeName}
                               </span>
@@ -242,13 +209,25 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Sidebar Footer Info */}
+      {/* Sidebar Footer Status */}
       <div className="p-3 border-t border-border/50 text-[11px] text-muted-foreground bg-muted/20">
-        <div className="flex items-center gap-1.5 text-emerald-500 font-semibold mb-1">
-          <Zap className="h-3 w-3" />
-          <span>Dynamic RBAC Active</span>
-        </div>
-        <span>Menus hide/show automatically per role permissions</span>
+        {showSuperAdminShortcut ? (
+          <>
+            <div className="flex items-center gap-1.5 text-amber-400 font-bold mb-1">
+              <Crown className="h-3.5 w-3.5" />
+              <span>Super Admin Bypass Active</span>
+            </div>
+            <span>All permission checks skipped — unrestricted access</span>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5 text-emerald-500 font-semibold mb-1">
+              <Zap className="h-3 w-3" />
+              <span>Dynamic RBAC Active</span>
+            </div>
+            <span>Menus & buttons adapt automatically per role rights</span>
+          </>
+        )}
       </div>
     </aside>
   );

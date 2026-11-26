@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
-import { usePermissions, ROLE_PRESETS } from '@/hooks/use-permissions';
+import { usePermissions } from '@/hooks/use-permissions';
+import { useDynamicStore } from '@/hooks/use-dynamic-store';
 import { Shield } from 'lucide-react';
 
 export function RoleSwitcher() {
   const { activeRole, switchRole, isLoading } = usePermissions();
+  const { roles } = useDynamicStore();
 
   return (
     <div className="flex items-center gap-2">
@@ -17,8 +19,8 @@ export function RoleSwitcher() {
           onChange={(e) => switchRole(e.target.value)}
           className="bg-transparent text-primary font-semibold focus:outline-none cursor-pointer text-xs"
         >
-          {Object.entries(ROLE_PRESETS).map(([key, role]) => (
-            <option key={key} value={key} className="bg-card text-foreground">
+          {roles.map((role) => (
+            <option key={role.id} value={role.slug} className="bg-card text-foreground">
               Role: {role.name}
             </option>
           ))}

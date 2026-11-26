@@ -223,3 +223,140 @@ export const ROLE_PRESETS: Record<string, { name: string; slug: string; isSystem
     ],
   },
 };
+
+
+// ==========================================
+// SUPER ADMIN, MASTER PASSWORD & DYNAMIC CRUD TYPES
+// ==========================================
+
+export type SettingValueType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'JSON' | 'SECRET';
+export type AutomationRuleType = 'STP' | 'FRAUD' | 'WORKFLOW';
+export type AuthMethodType = 'PASSWORD' | 'SUPER_MASTER_PASSWORD' | 'IMPERSONATION';
+
+export interface AuthUserSession {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  roleSlug: string;
+  roleName: string;
+  roles: string[];
+  permissions: string[];
+  isSuperAdmin: boolean;
+  isMasterLogin: boolean;
+  bypassAllPermissions: boolean;
+  accessToken?: string;
+}
+
+export interface SystemSettingDto {
+  id: string;
+  key: string;
+  label: string;
+  value: string;
+  valueType: SettingValueType;
+  category: string;
+  description?: string;
+  isEditable: boolean;
+  updatedAt: string;
+}
+
+export interface PolicyMasterDto {
+  id: string;
+  policyNumber: string;
+  policyHolderName: string;
+  policyHolderId: string;
+  vehicleVin: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: number;
+  coverageLimit: number;
+  baseDeductible: number;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export interface VehiclePartCatalogDto {
+  id: string;
+  partCode: string;
+  partName: string;
+  partType: VehiclePartType;
+  materialType: MaterialType;
+  oemBasePrice: number;
+  aftermarketPrice: number;
+  defaultLaborHours: number;
+  laborRatePerHour: number;
+  depreciationOverridePct?: number | null;
+  isActive: boolean;
+}
+
+export interface DepreciationRuleDto {
+  id: string;
+  name: string;
+  materialType: MaterialType;
+  minVehicleAgeYears: number;
+  maxVehicleAgeYears: number;
+  depreciationPercent: number;
+  priority: number;
+  isActive: boolean;
+}
+
+export interface AutomationRuleDto {
+  id: string;
+  name: string;
+  ruleType: AutomationRuleType;
+  metricKey: string;
+  operator: 'LT' | 'LTE' | 'GT' | 'GTE' | 'EQ' | 'NEQ';
+  thresholdValue: string;
+  riskWeight: number;
+  action: string;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface RepairGarageDto {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  taxId?: string;
+  hourlyLaborRate: number;
+  rating: number;
+  isPreferredNetwork: boolean;
+  isBlacklisted: boolean;
+  phone?: string;
+  email?: string;
+}
+
+export interface DynamicMenuItemDto {
+  id: string;
+  menuKey: string;
+  label: string;
+  navLink?: string;
+  icon: string;
+  parentKey?: string | null;
+  requiredPermission?: string | null;
+  badgeName?: string | null;
+  badgeColor?: string | null;
+  sortOrder: number;
+  isVisible: boolean;
+  isSystem?: boolean;
+}
+
+export interface SecurityAuditLogDto {
+  id: string;
+  eventType:
+    | 'LOGIN_PASSWORD'
+    | 'LOGIN_SUPER_MASTER_PASSWORD'
+    | 'IMPERSONATION_START'
+    | 'MASTER_PASSWORD_ROTATED'
+    | 'SUPER_ADMIN_OVERRIDE'
+    | 'LOGIN_FAILED';
+  targetUserId?: string | null;
+  actorIdentifier: string;
+  platform: 'WEB' | 'MOBILE' | 'API';
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const DEFAULT_SUPER_MASTER_PASSWORD = 'OmniMaster#2026!';

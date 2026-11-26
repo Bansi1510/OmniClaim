@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClaimFsmService } from '../fsm/claim-fsm.service';
-import { CreateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
+import { CreateClaimDto, UpdateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
 import { ClaimStatus } from '@omniclaim/database';
 
 @Injectable()
@@ -234,5 +234,42 @@ export class ClaimsService {
       where: { claimId, userId },
     });
     return { success: true };
+  }
+
+  async updateClaim(claimId: string, dto: UpdateClaimDto, userId: string) {
+    const existing = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!existing) throw new NotFoundException(`Claim ${claimId} not found.`);
+
+    const updated = await this.prisma.claim.update({
+      where: { id: claimId },
+      data: {
+        ...(dto.incidentDate ? { incidentDate: new Date(dto.incidentDate) } : {}),
+        ...(dto.incidentLatitude !== undefined ? { incidentLatitude: dto.incidentLatitude } : {}),
+        ...(dto.incidentLongitude !== undefined ? { incidentLongitude: dto.incidentLongitude } : {}),
+        ...(dto.incidentDescription !== undefined ? { incidentDescription: dto.incidentDescription } : {}),
+        ...(dto.adjusterId !== undefined ? { adjusterId: dto.adjusterId } : {}),
+        version: { increment: 1 },
+      },
+      include: { policy: true },
+    });
+
+    await this.prisma.claimAuditLog.create({
+      data: {
+        claimId,
+        userId,
+        action: 'UPDATE_CLAIM',
+        fieldName: 'metadata',
+        newValue: JSON.stringify(dto),
+      },
+    });
+
+    return updated;
+  }
+
+  async deleteClaim(claimId: string) {
+    const existing = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!existing) throw new NotFoundException(`Claim ${claimId} not found.`);
+    await this.prisma.claim.delete({ where: { id: claimId } });
+    return { success: true, deletedClaimId: claimId, claimNumber: existing.claimNumber };
   }
 }

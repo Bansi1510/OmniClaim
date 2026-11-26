@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { ClaimsService } from './claims.service';
-import { CreateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
+import { CreateClaimDto, UpdateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
 import { DynamicPermissionsGuard } from '../../common/guards/dynamic-permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -105,6 +106,24 @@ export class ClaimsController {
   @ApiOperation({ summary: 'Fetch complete multi-modal claim detail dossier' })
   async getClaim(@Param('id') id: string) {
     return this.claimsService.getClaimById(id);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('claims:update')
+  @ApiOperation({ summary: 'Dynamically edit claim details, GPS coordinates, or description' })
+  async updateClaim(
+    @Param('id') id: string,
+    @Body() dto: UpdateClaimDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.claimsService.updateClaim(id, dto, user.id);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('claims:delete')
+  @ApiOperation({ summary: 'Delete a claim dossier' })
+  async deleteClaim(@Param('id') id: string) {
+    return this.claimsService.deleteClaim(id);
   }
 
   @Post(':id/transition')

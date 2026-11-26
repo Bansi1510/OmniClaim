@@ -54,3 +54,31 @@ export class AssignAdjusterDto {
   @IsNotEmpty()
   adjusterId: string;
 }
+
+
+export class UpdateClaimDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsDateString()
+  incidentDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  incidentLatitude?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  incidentLongitude?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  incidentDescription?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  adjusterId?: string;
+}

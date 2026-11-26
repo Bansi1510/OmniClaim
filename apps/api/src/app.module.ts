@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { RbacModule } from './modules/rbac/rbac.module';
+import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { ClaimFsmModule } from './modules/fsm/claim-fsm.module';
 import { ClaimsModule } from './modules/claims/claims.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
@@ -20,7 +22,9 @@ import { WebhookModule } from './modules/webhooks/webhook.module';
     }),
     PrismaModule,
     RedisModule,
+    AuthModule,
     RbacModule,
+    SuperAdminModule,
     ClaimFsmModule,
     ReconciliationModule,
     ActuarialModule,

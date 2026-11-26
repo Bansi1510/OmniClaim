@@ -1,111 +1,102 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Breadcrumb } from '@/components/common/breadcrumb';
-import { Search, UserCheck, Shield, CheckCircle2 } from 'lucide-react';
+import { Search, UserCheck, Shield, CheckCircle2, Plus, Edit2, Trash2, Crown, LogIn } from 'lucide-react';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useDynamicStore, DynamicUser } from '@/hooks/use-dynamic-store';
 import { Can } from '@/components/auth/can';
 
-interface UserRow {
-  id: string;
-  email: string;
-  fullName: string;
-  roleName: string;
-  roleSlug: string;
-  isActive: boolean;
-  assignedAt: string;
-}
-
-const INITIAL_USERS: UserRow[] = [
-  {
-    id: 'u-1',
-    email: 'admin@omniclaim.internal',
-    fullName: 'Chief Enterprise Admin',
-    roleName: 'Super Administrator',
-    roleSlug: 'SUPER_ADMIN',
-    isActive: true,
-    assignedAt: '2026-11-20',
-  },
-  {
-    id: 'u-2',
-    email: 'adjuster.senior@omniclaim.internal',
-    fullName: 'Sarah Jenkins',
-    roleName: 'Senior Claims Adjuster',
-    roleSlug: 'SENIOR_ADJUSTER',
-    isActive: true,
-    assignedAt: '2026-11-21',
-  },
-  {
-    id: 'u-3',
-    email: 'fraud.siu@omniclaim.internal',
-    fullName: 'Marcus Vance',
-    roleName: 'SIU Fraud Investigator',
-    roleSlug: 'FRAUD_INVESTIGATOR',
-    isActive: true,
-    assignedAt: '2026-11-22',
-  },
-  {
-    id: 'u-4',
-    email: 'finance.controller@omniclaim.internal',
-    fullName: 'David Sterling',
-    roleName: 'Finance Controller',
-    roleSlug: 'FINANCE_CONTROLLER',
-    isActive: true,
-    assignedAt: '2026-11-23',
-  },
-];
-
 export default function UserManagementPage() {
-  const { isSystemAdmin, hasPermission } = usePermissions();
-  const [users, setUsers] = useState<UserRow[]>(INITIAL_USERS);
+  const router = useRouter();
+  const { isSystemAdmin, isMasterLogin, bypassAllPermissions, hasPermission, impersonateUser } = usePermissions();
+  const { users, roles, addUser, updateUser, deleteUser } = useDynamicStore();
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
-  const [newRoleSlug, setNewRoleSlug] = useState('');
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<DynamicUser | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const canAssignRole = isSystemAdmin || hasPermission('rbac:users_assign');
+  // User Add/Edit Form states
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('AdminOmniClaim2026!');
+  const [roleSlug, setRoleSlug] = useState('CLAIMS_ADJUSTER');
+  const [isSuperAdminFlag, setIsSuperAdminFlag] = useState(false);
+  const [isActiveFlag, setIsActiveFlag] = useState(true);
+
+  const canManageUsers = isSystemAdmin || isMasterLogin || bypassAllPermissions || hasPermission('rbac:users_assign');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleOpenAssign = (user: UserRow) => {
-    setSelectedUser(user);
-    setNewRoleSlug(user.roleSlug);
+  const handleOpenAdd = () => {
+    setEditingUser(null);
+    setFullName('');
+    setUsername('');
+    setEmail('');
+    setPassword('AdminOmniClaim2026!');
+    setRoleSlug(roles[1]?.slug || 'CLAIMS_ADJUSTER');
+    setIsSuperAdminFlag(false);
+    setIsActiveFlag(true);
+    setShowUserModal(true);
   };
 
-  const handleSaveRole = (e: React.FormEvent) => {
+  const handleOpenEdit = (user: DynamicUser) => {
+    setEditingUser(user);
+    setFullName(user.fullName);
+    setUsername(user.username);
+    setEmail(user.email);
+    setPassword(user.password);
+    setRoleSlug(user.roleSlug);
+    setIsSuperAdminFlag(user.isSuperAdmin);
+    setIsActiveFlag(user.isActive);
+    setShowUserModal(true);
+  };
+
+  const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUser || !newRoleSlug) return;
-
-    const roleNameMap: Record<string, string> = {
-      SUPER_ADMIN: 'Super Administrator',
-      SENIOR_ADJUSTER: 'Senior Claims Adjuster',
-      JUNIOR_ADJUSTER: 'Junior Claims Adjuster',
-      FRAUD_INVESTIGATOR: 'SIU Fraud Investigator',
-      FINANCE_CONTROLLER: 'Finance Controller',
+    const matchedRole = roles.find((r) => r.slug === roleSlug);
+    const payload = {
+      fullName: fullName.trim(),
+      username: username.toLowerCase().trim(),
+      email: email.toLowerCase().trim(),
+      password,
+      roleSlug,
+      roleName: matchedRole?.name || roleSlug,
+      isSuperAdmin: isSuperAdminFlag || roleSlug === 'SUPER_ADMIN',
+      isActive: isActiveFlag,
     };
 
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === selectedUser.id
-          ? {
-              ...u,
-              roleSlug: newRoleSlug,
-              roleName: roleNameMap[newRoleSlug] || newRoleSlug,
-            }
-          : u
-      )
-    );
+    if (editingUser) {
+      updateUser(editingUser.id, payload);
+      showToast(`User "${payload.fullName}" (@${payload.username}) updated. Redis cache invalidated.`);
+    } else {
+      addUser(payload);
+      showToast(`New user "${payload.fullName}" (@${payload.username}) created.`);
+    }
+    setShowUserModal(false);
+  };
 
-    showToast(`Role updated for ${selectedUser.fullName}. Redis permissions cache invalidated.`);
-    setSelectedUser(null);
+  const handleDeleteUser = (user: DynamicUser) => {
+    if (user.username === 'superadmin') {
+      alert('Root superadmin account cannot be deleted.');
+      return;
+    }
+    if (confirm(`Delete user "${user.fullName}" (@${user.username})?`)) {
+      deleteUser(user.id);
+      showToast(`User "${user.fullName}" deleted.`);
+    }
   };
 
   const filteredUsers = users.filter(
     (u) =>
       u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.roleName.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -113,8 +104,8 @@ export default function UserManagementPage() {
   return (
     <div>
       <Breadcrumb
-        title="User Access & Role Assignment"
-        items={[{ label: 'Setup' }, { label: 'User Management' }]}
+        title="User Management & Dynamic Role Assignment"
+        items={[{ label: 'Setup' }, { label: 'Users & Access' }]}
       />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -122,30 +113,42 @@ export default function UserManagementPage() {
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search users by name, email, or role..."
+            placeholder="Search by name, username, email, or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="rounded-lg border border-border bg-card pl-9 pr-3.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-80 shadow-sm"
           />
         </div>
 
-        {toastMessage && (
-          <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs text-emerald-500 font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {toastMessage && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs text-emerald-500 font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
+          <Can permission="rbac:users_assign">
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-3.5 py-1.5 text-xs font-bold shadow transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add User</span>
+            </button>
+          </Can>
+        </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="border-b border-border bg-muted/40 font-semibold text-muted-foreground uppercase">
             <tr>
-              <th className="py-3 px-4">User</th>
+              <th className="py-3 px-4">User &amp; Username</th>
               <th className="py-3 px-4">Assigned Role</th>
               <th className="py-3 px-4 text-center">Status</th>
               <th className="py-3 px-4">Assigned Since</th>
-              {canAssignRole && <th className="py-3 px-4 text-right">Action</th>}
+              {canManageUsers && <th className="py-3 px-4 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -156,11 +159,16 @@ export default function UserManagementPage() {
                     <div className="h-6 w-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold">
                       {user.fullName.slice(0, 2).toUpperCase()}
                     </div>
-                    {user.fullName}
+                    <span>{user.fullName}</span>
+                    {user.isSuperAdmin && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5 text-[9px] font-black">
+                        <Crown className="h-2.5 w-2.5" /> SUPER
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[11px] font-mono text-muted-foreground pl-8">
-                    {user.email}
-                  </span>
+                  <div className="text-[11px] font-mono text-muted-foreground pl-8">
+                    @{user.username} · {user.email}
+                  </div>
                 </td>
                 <td className="py-3.5 px-4">
                   <div className="flex items-center gap-1.5">
@@ -172,24 +180,61 @@ export default function UserManagementPage() {
                   </span>
                 </td>
                 <td className="py-3.5 px-4 text-center">
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold">
-                    Active
-                  </span>
+                  <button
+                    disabled={!canManageUsers}
+                    onClick={() => {
+                      updateUser(user.id, { isActive: !user.isActive });
+                      showToast(`${user.fullName} marked ${!user.isActive ? 'Active' : 'Inactive'}.`);
+                    }}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                      user.isActive
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                    }`}
+                  >
+                    {user.isActive ? 'Active' : 'Inactive'}
+                  </button>
                 </td>
                 <td className="py-3.5 px-4 text-muted-foreground font-mono">
                   {user.assignedAt}
                 </td>
-                {canAssignRole && (
+                {canManageUsers && (
                   <td className="py-3.5 px-4 text-right">
-                    <Can permission="rbac:users_assign">
-                      <button
-                        onClick={() => handleOpenAssign(user)}
-                        className="inline-flex items-center gap-1 rounded bg-secondary hover:bg-secondary/80 text-foreground border border-border px-3 py-1 text-xs font-semibold transition"
-                      >
-                        <UserCheck className="h-3 w-3" />
-                        <span>Change Role</span>
-                      </button>
-                    </Can>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {(isSystemAdmin || isMasterLogin || bypassAllPermissions) && (
+                        <button
+                          onClick={() => {
+                            impersonateUser(user.id, true);
+                            router.push('/claims');
+                          }}
+                          className="inline-flex items-center gap-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold"
+                          title="Impersonate & Enter Account"
+                        >
+                          <LogIn className="h-3 w-3" />
+                          <span>Login As</span>
+                        </button>
+                      )}
+                      <Can permission="rbac:users_assign">
+                        <button
+                          onClick={() => handleOpenEdit(user)}
+                          className="inline-flex items-center gap-1 rounded bg-secondary hover:bg-secondary/80 text-foreground border border-border px-2.5 py-1 text-xs font-semibold"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          <span>Edit</span>
+                        </button>
+                      </Can>
+                      {user.username !== 'superadmin' && (
+                        <Can permission="rbac:users_assign">
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            className="rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 p-1.5"
+                            title="Delete User"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </Can>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -198,48 +243,62 @@ export default function UserManagementPage() {
         </table>
       </div>
 
-      {/* Role Assignment Modal */}
-      {selectedUser && (
+      {/* Add / Edit User Modal */}
+      {showUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h2 className="text-lg font-bold text-foreground mb-1">
-              Change Role for {selectedUser.fullName}
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+            <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-primary" />
+              <span>{editingUser ? `Edit User: ${editingUser.fullName}` : 'Create New System User'}</span>
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Updating the user role recalculates active permissions in real-time.
+              Users can log in immediately via username or email, or via Super Master Password.
             </p>
 
-            <form onSubmit={handleSaveRole} className="space-y-4">
+            <form onSubmit={handleSaveUser} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">
-                  Select Role <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={newRoleSlug}
-                  onChange={(e) => setNewRoleSlug(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
-                >
-                  <option value="SUPER_ADMIN">Super Administrator (Full System Authority)</option>
-                  <option value="SENIOR_ADJUSTER">Senior Claims Adjuster (Approval & Override Authority)</option>
-                  <option value="JUNIOR_ADJUSTER">Junior Claims Adjuster (Intake & Triage Rights)</option>
-                  <option value="FRAUD_INVESTIGATOR">SIU Fraud Investigator (Special Investigation Unit)</option>
-                  <option value="FINANCE_CONTROLLER">Finance Controller (Ledger & Payout Authority)</option>
+                <label className="block font-semibold mb-1">Full Name *</label>
+                <input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Priya Patel" className="w-full rounded-lg border border-border bg-background px-3 py-1.5" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Username *</label>
+                  <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. priya.patel" className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Password *</label>
+                  <input required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Email *</label>
+                <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="priya@omniclaim.internal" className="w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Assigned Role *</label>
+                <select value={roleSlug} onChange={(e) => setRoleSlug(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2">
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.slug}>{r.name} ({r.slug})</option>
+                  ))}
                 </select>
               </div>
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 font-semibold cursor-pointer">
+                  <input type="checkbox" checked={isSuperAdminFlag} onChange={(e) => setIsSuperAdminFlag(e.target.checked)} />
+                  <span className="text-amber-400">Super Admin (Skip All Permissions)</span>
+                </label>
+                <label className="flex items-center gap-2 font-semibold cursor-pointer">
+                  <input type="checkbox" checked={isActiveFlag} onChange={(e) => setIsActiveFlag(e.target.checked)} />
+                  <span>Active</span>
+                </label>
+              </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setSelectedUser(null)}
-                  className="rounded-lg border border-border bg-muted/60 hover:bg-muted text-foreground px-4 py-1.5 text-xs font-semibold transition"
-                >
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <button type="button" onClick={() => setShowUserModal(false)} className="rounded-lg border border-border bg-muted/60 px-4 py-1.5 font-semibold">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-1.5 text-xs font-semibold shadow transition"
-                >
-                  Confirm & Invalidate Cache
+                <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">
+                  {editingUser ? 'Save Changes' : 'Create User'}
                 </button>
               </div>
             </form>

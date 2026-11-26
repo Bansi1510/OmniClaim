@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import * as crypto from 'crypto';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 import { RedisService } from '../../modules/redis/redis.service';
 import { PrismaService } from '../../modules/prisma/prisma.service';
@@ -20,18 +21,65 @@ export class DynamicPermissionsGuard implements CanActivate {
     private readonly prisma: PrismaService,
   ) {}
 
+  private decodeBearerToken(authHeader?: string) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    try {
+      const token = authHeader.slice(7).trim();
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const [header, body, sig] = parts;
+      const secret = process.env.JWT_SECRET || 'omniclaim_enterprise_jwt_super_secret_key_2026';
+      const expected = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
+      if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+        return null;
+      }
+      const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+
+    // Hydrate request.user from Bearer token if present
+    const tokenPayload = this.decodeBearerToken(request.headers['authorization']);
+    if (tokenPayload) {
+      request.user = {
+        id: tokenPayload.sub,
+        username: tokenPayload.username,
+        email: tokenPayload.email,
+        fullName: tokenPayload.fullName,
+        roles: tokenPayload.roles || [],
+        isSuperAdmin: Boolean(tokenPayload.isSuperAdmin),
+        isMasterLogin: Boolean(tokenPayload.isMasterLogin),
+        bypassAllPermissions: Boolean(tokenPayload.bypassAllPermissions),
+      };
+    }
+
     const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
       PERMISSIONS_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    // If no permission metadata is attached, the route is open or just authenticated
+    // If no permission metadata is attached, route is open or just authenticated
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    // 1. SUPER ADMIN & SUPER MASTER PASSWORD UNCONDITIONAL BYPASS
+    // Skips ALL permission checks so Super Admin & Master Password sessions can access everything
+    if (
+      request.user?.isSuperAdmin === true ||
+      request.user?.bypassAllPermissions === true ||
+      request.user?.isMasterLogin === true ||
+      request.user?.roles?.includes('SUPER_ADMIN')
+    ) {
+      return true;
+    }
+
     const userId = request.user?.id || request.headers['x-user-id'];
 
     if (!userId) {
@@ -40,7 +88,11 @@ export class DynamicPermissionsGuard implements CanActivate {
 
     const userPermissions = await this.getUserPermissions(userId);
 
-    // SUPER_ADMIN override or check all required permissions
+    // Wildcard '*' or SUPER_ADMIN marker skips all permission requirements
+    if (userPermissions.has('*') || userPermissions.has('SUPER_ADMIN')) {
+      return true;
+    }
+
     const hasAll = requiredPermissions.every((perm) => userPermissions.has(perm));
 
     if (!hasAll) {
@@ -64,7 +116,7 @@ export class DynamicPermissionsGuard implements CanActivate {
       try {
         const parsed = JSON.parse(cached) as string[];
         return new Set(parsed);
-      } catch (e) {
+      } catch {
         // Fall through to DB on cache parse error
       }
     }
@@ -91,6 +143,16 @@ export class DynamicPermissionsGuard implements CanActivate {
 
     if (!userWithRoles) {
       return new Set<string>();
+    }
+
+    // Super Admin flag or SUPER_ADMIN role grants unconditional wildcard bypass
+    if (
+      userWithRoles.isSuperAdmin ||
+      userWithRoles.roles.some((ur) => ur.role.slug === 'SUPER_ADMIN')
+    ) {
+      const wildcard = new Set<string>(['*', 'SUPER_ADMIN']);
+      await this.redis.set(cacheKey, JSON.stringify(Array.from(wildcard)), 3600);
+      return wildcard;
     }
 
     const permissionSet = new Set<string>();
