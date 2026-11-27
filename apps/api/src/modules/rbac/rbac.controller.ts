@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { RbacService } from './rbac.service';
 import { CreateRoleDto, UpdateRoleDto, AssignPermissionsDto, AssignRolesDto } from './dto/rbac.dto';
+import { CreatePermissionDto } from './dto/permission.dto';
 import { DynamicPermissionsGuard } from '../../common/guards/dynamic-permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -26,6 +27,20 @@ export class RbacController {
   @ApiOperation({ summary: 'Get dynamic navigation menu filtered by user permissions (college erp GET /menu)' })
   async getNavigationMenu(@CurrentUser() user: AuthenticatedUser) {
     return this.rbacService.getNavigationMenuForUser(user.id);
+  }
+
+  @Get('permissions/master')
+  @RequirePermissions('rbac:roles_create')
+  @ApiOperation({ summary: 'List all permissions (Permission Master)' })
+  async getPermissions() {
+    return this.rbacService.listAllPermissions();
+  }
+
+  @Post('permissions')
+  @RequirePermissions('rbac:roles_create')
+  @ApiOperation({ summary: 'Create a new permission entry in Master' })
+  async createPermission(@Body() dto: CreatePermissionDto) {
+    return this.rbacService.createPermission(dto);
   }
 
   @Get('roles')

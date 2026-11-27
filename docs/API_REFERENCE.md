@@ -9,29 +9,34 @@ All protected endpoints require header: `Authorization: Bearer <accessToken>`.
 
 | Method | Path | Auth / Permission | Purpose |
 |---|---|---|---|
-| `POST` | `/api/v1/auth/login` | Public | Authenticate by username or email; returns `accessToken`, `refreshToken`, and resolved user permissions |
+| `POST` | `/api/v1/auth/login` | Public | Authenticate by username or email; returns `accessToken`, `refreshToken`, `user.mustChangePassword`, and resolved permissions |
+| `POST` | `/api/v1/auth/change-password` | Valid JWT | Verify `currentPassword`, update password hash (`PBKDF2-SHA512`), and clear `mustChangePassword` |
 | `POST` | `/api/v1/auth/refresh` | Public | Rotate `refreshToken` and issue a fresh token pair (with reuse detection) |
 | `POST` | `/api/v1/auth/logout` | Public | Revoke an active refresh token session |
 | `GET` | `/api/v1/auth/me` | Valid JWT | Inspect current authenticated session |
 | `POST` | `/api/v1/auth/rotate-master-password` | `superadmin:access` | Rotate Super Admin master password |
-| `POST` | `/api/v1/auth/impersonate/:userId` | `superadmin:access` | Impersonate a user account for administrative support |
 | `GET` | `/api/v1/auth/security-audit-logs` | `audit:read` | List authentication & security audit events |
+
+*(Note: Direct `/auth/impersonate/:userId` has been removed; all account sessions authenticate directly via `/auth/login`.)*
 
 ---
 
-## 2. Policy Catalog, Applications & Lifecycle (`/api/v1`)
+## 2. Policy Catalog, Vehicle Types, Applications & Lifecycle (`/api/v1`)
 
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
-| `GET` | `/api/v1/policy-catalog/categories` | `policies:read` | List active policy categories with nested active products |
+| `GET` | `/api/v1/policy-catalog/categories` | `policies:read` | List active policy categories with vehicle types and nested active products |
 | `POST` | `/api/v1/policy-catalog/categories` | `products:manage` | Create or update a policy category |
 | `DELETE` | `/api/v1/policy-catalog/categories/:id` | `products:manage` | Delete unused category or deactivate if products reference it |
-| `GET` | `/api/v1/policy-catalog/products` | `policies:read` | List active products (optional `?categoryCode=`) |
-| `POST` | `/api/v1/policy-catalog/products` | `products:manage` | Create or version-bump a policy product |
+| `GET` | `/api/v1/policy-catalog/vehicle-types` | `policies:read` | List active vehicle types (optional `?categoryCode=`) with product counts |
+| `POST` | `/api/v1/policy-catalog/vehicle-types` | `products:manage` | Create or update a vehicle type linked to a policy category |
+| `DELETE` | `/api/v1/policy-catalog/vehicle-types/:id` | `products:manage` | Delete unused vehicle type or deactivate if products reference it |
+| `GET` | `/api/v1/policy-catalog/products` | `policies:read` | List active products (filters: `?categoryCode=`, `?vehicleTypeId=`) |
+| `POST` | `/api/v1/policy-catalog/products` | `products:manage` | Create or version-bump a policy product (supports `vehicleTypeId`, `addonsJson`, `exclusionsJson`, `eligibilityJson`) |
 | `DELETE` | `/api/v1/policy-catalog/products/:id` | `products:manage` | Delete unused product or deactivate if referenced |
 | `GET` | `/api/v1/policy-applications` | `policies:read` | List applications (scoped to own for policyholders; all for underwriters/admins) |
 | `GET` | `/api/v1/policy-applications/:id` | `policies:read` | Get full application dossier (documents, quotes, underwriting reviews, payments) |
-| `POST` | `/api/v1/policy-applications` | `policies:apply` | Create a new draft policy application validated against product limits |
+| `POST` | `/api/v1/policy-applications` | `policies:apply` | Create a new draft policy application validated against category/vehicleType/product limits |
 | `PATCH` | `/api/v1/policy-applications/:id` | `policies:apply` | Update draft or `DOCS_REQUIRED` application |
 | `POST` | `/api/v1/policy-applications/:id/documents` | `policies:apply` | Attach versioned supporting document metadata |
 | `POST` | `/api/v1/policy-applications/:id/submit` | `policies:apply` | Submit application (auto-quotes if eligible or queues for underwriting) |
@@ -47,7 +52,7 @@ All protected endpoints require header: `Authorization: Bearer <accessToken>`.
 
 ---
 
-## 3. Claims, Reconciliation, Actuarial, Fraud & Settlement (`/api/v1/claims`)
+## 3. Claims, Live Evidence Capture, Reconciliation & Settlement (`/api/v1/claims`)
 
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
@@ -56,6 +61,9 @@ All protected endpoints require header: `Authorization: Bearer <accessToken>`.
 | `POST` | `/api/v1/claims` | `claims:create` | Create a new claim against an active policy |
 | `PATCH` | `/api/v1/claims/:id` | `claims:update` | Update claim fields with OCC version increment |
 | `DELETE` | `/api/v1/claims/:id` | `claims:delete` | FK-safe transactional deletion (detaches ledger journals cleanly) |
+| `POST` | `/api/v1/claims/:id/evidence/capture` | `claims:create` | Upload live-camera image (JPEG/PNG/WEBP magic-byte check, max 8 MB, SHA-256 checksum, ownership check, step tag) |
+| `POST` | `/api/v1/claims/:id/evidence/staff-upload` | `claims:update` | Audited staff exception evidence upload requiring `exceptionReason` (min 5 chars) |
+| `GET` | `/api/v1/claims/:id/evidence/:evidenceId/file` | `claims:read` | Stream stored claim evidence image with customer ownership validation |
 | `POST` | `/api/v1/claims/:id/transition` | `claims:approve` | Execute FSM status transition with optimistic concurrency version check |
 | `POST` | `/api/v1/claims/:id/reconcile` | `claims:update` | Reconcile OCR bill line items against detected damages |
 | `POST` | `/api/v1/claims/:id/reconcile/override` | `claims:override_reconciliation` | Adjuster override on a reconciled item with reason & audit trail |
@@ -71,12 +79,13 @@ All protected endpoints require header: `Authorization: Bearer <accessToken>`.
 
 ---
 
-## 4. RBAC, Super Admin, Audit & Webhooks
+## 4. RBAC, Super Admin, User Creation, Audit & Webhooks
 
 - **RBAC (`/api/v1/rbac`)**: `GET navigation-menu`, `GET/POST/PATCH/DELETE roles`, `GET permissions`, `GET/POST roles/:id/permissions`, `GET user-permissions`, `GET users`, `POST users/:id/roles`.
 - **Super Admin (`/api/v1/super-admin`)**:
   - `GET bootstrap` (requires valid JWT; filtered for policyholders)
   - `GET overview` (`superadmin:access`), `POST database/reseed` (`superadmin:access`), `POST claims/:id/force-status` (`superadmin:access`)
-  - CRUD for `settings` (`settings:manage`), `policies` (`policies:manage`), `parts` (`parts:manage`), `depreciation-rules` & `automation-rules` (`rules:manage`), `garages` (`garages:manage`), `menus` (`menus:manage`), `users` (`rbac:users_assign`), `ledger-accounts` (`ledger:read`/`ledger:override`), `journals` (`ledger:override`), `locks/:claimId` (`presence:unlock`).
+  - `POST users` (`rbac:users_assign`) — Auto-generates unique `username` if omitted or colliding, defaults password to common `OmniClaim@123` (`DEFAULT_USER_PASSWORD`), sets `mustChangePassword: true`, and returns `temporaryPassword`.
+  - Full CRUD for `settings` (`settings:manage`), `policies` (`policies:manage`), `parts` (`parts:manage`), `depreciation-rules` & `automation-rules` (`rules:manage`), `garages` (`garages:manage`), `menus` (`menus:manage`), `users` (`rbac:users_assign`), `ledger-accounts` (`ledger:read`/`ledger:override`), `journals` (`ledger:override`), `locks/:claimId` (`presence:unlock`).
 - **Audit (`/api/v1/audit`)**: `GET logs`, `GET stats`, `GET logs/:id` (`audit:read`), `DELETE logs/:id` (`superadmin:access`).
 - **Webhooks (`/api/v1/webhooks`)**: `POST ai-completion` (verified via `x-omniclaim-signature` HMAC-SHA256).

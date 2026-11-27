@@ -16,6 +16,7 @@ import { LedgerModule } from './modules/ledger/ledger.module';
 import { StpModule } from './modules/stp/stp.module';
 import { WebhookModule } from './modules/webhooks/webhook.module';
 import { PolicyApplicationsModule } from './modules/policy-applications/policy-applications.module';
+import { ThemeModule } from './modules/theme/theme.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PolicyApplicationsModule } from './modules/policy-applications/policy-a
     ClaimsModule,
     WebhookModule,
     PolicyApplicationsModule,
+    ThemeModule,
   ],
 })
 export class AppModule implements NestModule {

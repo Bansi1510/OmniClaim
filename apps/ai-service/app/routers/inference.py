@@ -1,7 +1,13 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Header, status
 import requests
 import json
-from app.schemas.inference import ClaimAnalysisRequest, ClaimAnalysisResult
+from app.schemas.asset_verification import (
+    VerifyAssetImageRequest,
+    VerifyAssetImageResponse,
+    CompareBaselineRequest,
+    CompareBaselineResponse,
+)
+from app.services.asset_verifier import AssetVerifierService
 from app.services.yolo_service import YoloDamageService
 from app.services.ocr_service import OcrInvoiceService
 from app.services.feature_service import FeatureExtractorService
@@ -12,6 +18,7 @@ router = APIRouter()
 yolo_service = YoloDamageService()
 ocr_service = OcrInvoiceService()
 feature_service = FeatureExtractorService()
+asset_verifier = AssetVerifierService()
 
 def process_claim_worker(request: ClaimAnalysisRequest):
     """
@@ -48,7 +55,17 @@ def process_claim_worker(request: ClaimAnalysisRequest):
             imageFeatures=image_features,
         )
 
-        # 4. Dispatch Signed HMAC-SHA256 Webhook to NestJS
+        # 4. Verify Baseline Comparison (if available)
+        if request.baselineImages:
+            baseline_req = CompareBaselineRequest(
+                assetCategory=request.assetCategory,
+                baselineImages=request.baselineImages,
+                claimImages=request.evidenceImages  # Reuse evidence images as claim images
+            )
+            comparison = asset_verifier.compare_baseline(baseline_req)
+            result.baselineComparison = comparison.comparisons
+
+        # 5. Dispatch Signed HMAC-SHA256 Webhook to NestJS
         callback_url = request.callbackUrl or settings.NESTJS_WEBHOOK_URL
         payload = result.model_dump(mode='json')
         signature = generate_hmac_signature(payload, settings.HMAC_SECRET)

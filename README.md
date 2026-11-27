@@ -1,6 +1,6 @@
 # OmniClaim Enterprise
 
-**Insurance Policy Management, Automated Claims Processing, Fraud Review & Double-Entry Accounting Platform**
+**Insurance Policy Management, Live Camera Claim Capture, Fraud Review & Double-Entry Accounting Platform**
 
 [![Turborepo](https://img.shields.io/badge/Turborepo-Monorepo-ef4444.svg)](https://turbo.build/)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15_App_Router-black.svg)](https://nextjs.org/)
@@ -14,11 +14,12 @@
 
 **OmniClaim Enterprise** is a full-stack insurtech monorepo covering the complete insurance lifecycle:
 
-1. **Policy Catalog, Application & Issuance**: Multi-category products (`AUTO`, `HEALTH`, `HOME`, `LIFE`, `TRAVEL`), draft/resume applications, versioned supporting documents, Decimal-safe backend quoting, Underwriting Review Queue, idempotent premium payment, instant binding Policy issuance, endorsements, renewals, and cancellations.
-2. **Claims Management & Finite State Machine**: End-to-end claims intake, OCC-locked state transitions, supplemental claims/disputes/appeals, reopening workflows, and collaborative adjuster presence locks.
-3. **Bill Reconciliation & Actuarial Math**: Image damage vs. repair invoice diffing with confidence thresholds and human-review flags on unmatched labor, plus database-driven, versioned depreciation schedules (`DepreciationRule` + `STP_MAX_PAYOUT` snapshots).
-4. **Fraud Review & Ledger Separation of Duties**: Geospatial distance checks, mock-GPS flags, `pgvector` duplicate photo similarity (`<=>`), advisory Straight-Through Processing (STP) recommendations (AI never directly disburses funds), idempotent settlement disbursements, and equal-and-opposite double-entry journal reversals (`sum(Debits) === sum(Credits)`).
-5. **Dynamic RBAC, Master Setup & Global Audit Trail**: Runtime role and permission management, unified `/master-setup` CRUD console (create multiple users per role, manage roles, policy categories, products, garages, and parts), `DataGrid` (`5, 10, 25, 50, All` pagination + CSV/Excel export), and automatic HTTP request + field-diff audit logging (`SystemActivityAuditLog`).
+1. **Configurable Policy Catalog & Issuance (`Category → Vehicle Type → Policy Product`)**: Dynamic categories (`AUTO`, `HEALTH`, `HOME`, `LIFE`, `TRAVEL`), configurable vehicle types (`CAR`, `BIKE`, `BUS`) with multiple tailored plans per vehicle type, draft/resume applications, versioned supporting documents, Decimal-safe quoting, Underwriting Review Queue, idempotent premium payment, instant binding Policy issuance, endorsements, renewals, and cancellations.
+2. **Guided Live Camera Claim Evidence Capture**: 7-step browser live camera capture (`Front`, `Rear`, `Left Side`, `Right Side`, `Damaged Area Close-Up`, `Number Plate`, `Additional Evidence`) with framing overlay, blur/brightness warning, retake/confirm preview, server-side JPEG/PNG/WEBP magic-byte validation, SHA-256 checksums, server timestamps, customer ownership isolation, and an audited staff exception upload flow (`claims:update`).
+3. **Claims Management & Finite State Machine**: End-to-end claims intake, OCC-locked state transitions, supplemental claims/disputes/appeals, reopening workflows, and collaborative adjuster presence locks.
+4. **Bill Reconciliation & Actuarial Math**: Image damage vs. repair invoice diffing with confidence thresholds and human-review flags on unmatched labor, plus database-driven, versioned depreciation schedules (`DepreciationRule` + `STP_MAX_PAYOUT` snapshots).
+5. **Fraud Review & Ledger Separation of Duties**: Geospatial distance checks, mock-GPS flags, `pgvector` duplicate photo similarity (`<=>`), advisory Straight-Through Processing (STP) recommendations (AI never directly disburses funds), idempotent settlement disbursements, and equal-and-opposite double-entry journal reversals (`sum(Debits) === sum(Credits)`).
+6. **Strict Role-Based Auth, Sidebar Master Setup & Audit Trail**: Dynamic RBAC permissions, collapsible sidebar **Master Setup** dropdown under **Administration**, clean **Operations** / **Administration** navigation ordering, unique username generation + common initial password (`OmniClaim@123`) with mandatory/self-service **Change Password** after login (with no direct role switching or one-click impersonation), `DataGrid` (`5, 10, 25, 50, All` pagination + CSV/Excel export), and automatic HTTP request + field-diff audit logging (`SystemActivityAuditLog`).
 
 ---
 
@@ -26,10 +27,11 @@
 
 | Guide | Purpose |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, security boundaries, Claim FSM, Policy Application lifecycle, and ledger invariants |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, auth & password flow, live camera pipeline, Claim FSM, Policy Application lifecycle, and ledger invariants |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Complete REST endpoint catalog, request rules, and required RBAC permissions |
-| [docs/DATABASE.md](docs/DATABASE.md) | All 44 PostgreSQL tables, 4 forward-only Prisma migrations, and idempotent seeding |
+| [docs/DATABASE.md](docs/DATABASE.md) | All 45 PostgreSQL tables, 6 forward-only Prisma migrations, and idempotent seeding |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Role-by-role plain-English walkthroughs for customers, adjusters, underwriters, finance, and admins |
+| [OMNICLAIM_COMPLETE_PROJECT_REPORT.md](OMNICLAIM_COMPLETE_PROJECT_REPORT.md) | Zero-to-end technical architecture, verified capabilities, and enterprise expansion roadmap |
 
 ---
 
@@ -38,16 +40,16 @@
 ```text
 OmniClaim/
 ├── apps/
-│   ├── web/              # Next.js 15 + React 19 + Tailwind CSS (Light/Dark theme, DataGrid UI)
-│   ├── api/              # NestJS 10 REST API (Auth, Claims, FSM, Policy Apps, Actuarial, Ledger, RBAC, Audit)
+│   ├── web/              # Next.js 15 + React 19 + Tailwind CSS (Light/Dark theme, Operations/Admin sidebar, DataGrid UI)
+│   ├── api/              # NestJS 10 REST API (Auth, Claims, Evidence Upload, FSM, Policy Apps, Actuarial, Ledger, RBAC, Audit)
 │   ├── ai-service/       # Python FastAPI service (YOLOv8 damage segmentation, PaddleOCR, embeddings)
 │   └── mobile/           # React Native Expo client
 ├── packages/
-│   ├── database/         # Prisma ORM schema, forward-only SQL migrations, and idempotent seeder
+│   ├── database/         # Prisma ORM schema (45 tables), 6 forward-only SQL migrations, and idempotent seeder
 │   ├── shared-types/     # Shared TypeScript DTOs and role presets
 │   ├── tsconfig/         # Shared TypeScript configs
 │   └── eslint-config/    # Monorepo ESLint config
-├── docs/                 # Regenerated enterprise documentation
+├── docs/                 # Project documentation
 └── docker-compose.yml    # Local PostgreSQL (pgvector), Redis, and LocalStack S3
 ```
 
@@ -95,10 +97,10 @@ npx --yes pnpm --filter @omniclaim/web start -p 3000
 ## Testing & Verification
 
 ```powershell
-# Run API Jest unit & integration test suites (8 suites / 50 tests)
+# Run API Jest unit & integration test suites (9 suites / 54 tests)
 npx --yes pnpm --filter @omniclaim/api test
 
-# Verify Prisma migration sync
+# Verify Prisma migration sync (6 migrations)
 npx --yes pnpm --filter @omniclaim/database exec prisma migrate status
 ```
 
@@ -106,7 +108,9 @@ npx --yes pnpm --filter @omniclaim/database exec prisma migrate status
 
 ## Default Seed Accounts
 
-| Role | Username | Email | Password (`DEFAULT_SEED_PASSWORD`) |
+> Direct role switching and one-click user impersonation are disabled. Sign out and log in cleanly via `/login` using a username or email. Newly created team accounts start with a generated unique username, common initial password `OmniClaim@123`, and are prompted to change their password upon first login.
+
+| Role | Username | Email | Seeded Password (`DEFAULT_SEED_PASSWORD`) |
 |---|---|---|---|
 | **Super Administrator** | `superadmin` | `admin@omniclaim.internal` | `AdminOmniClaim2026!` |
 | **Claims Adjuster / Underwriter** | `sarah.jenkins` | `adjuster.senior@omniclaim.internal` | `AdminOmniClaim2026!` |
