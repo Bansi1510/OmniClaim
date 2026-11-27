@@ -1,0 +1,50 @@
+[
+  {
+    "id": "auto-rule-stp-cap",
+    "name": "STP Fast-Track Ceiling",
+    "ruleType": "STP",
+    "metricKey": "netPayout",
+    "operator": "LTE",
+    "thresholdValue": "750",
+    "riskWeight": 0,
+    "action": "AUTO_SETTLE",
+    "description": "Eligible for autonomous payout when net payout <= $750",
+    "isActive": true
+  },
+  {
+    "id": "auto-rule-clip",
+    "name": "CLIP Vector Reuse Check",
+    "ruleType": "FRAUD",
+    "metricKey": "vectorCosineSimilarity",
+    "operator": "GTE",
+    "thresholdValue": "0.92",
+    "riskWeight": 50,
+    "action": "FLAG_SIU",
+    "description": "Flags recycled accident photos matching prior claims in pgvector",
+    "isActive": true
+  },
+  {
+    "id": "auto-rule-gps",
+    "name": "EXIF GPS Mismatch Rule",
+    "ruleType": "FRAUD",
+    "metricKey": "gpsDistanceMeters",
+    "operator": "GT",
+    "thresholdValue": "1000",
+    "riskWeight": 25,
+    "action": "ADD_RISK_SCORE",
+    "description": "Adds +25 risk points if photo GPS diverges >1km from incident site",
+    "isActive": true
+  },
+  {
+    "id": "auto-rule-mock-gps",
+    "name": "Mock Location Spoofing",
+    "ruleType": "FRAUD",
+    "metricKey": "isMockLocation",
+    "operator": "EQ",
+    "thresholdValue": "true",
+    "riskWeight": 40,
+    "action": "FLAG_SIU",
+    "description": "Immediate +40 risk score and SIU escalation on spoofed GPS",
+    "isActive": true
+  }
+]

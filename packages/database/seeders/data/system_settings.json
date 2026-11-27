@@ -1,0 +1,90 @@
+[
+  {
+    "id": "88a4f5c3-eb12-405d-9699-ae9ccc210b7f",
+    "key": "COMPANY_BRAND_NAME",
+    "label": "Platform Brand Name",
+    "value": "OmniClaim",
+    "valueType": "STRING",
+    "category": "BRANDING",
+    "description": "Dynamic organization display title across web and mobile interfaces",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "3a9d23b8-caec-47d2-a38f-5daa37e19303",
+    "key": "GPS_MISMATCH_METERS",
+    "label": "Geospatial Mismatch Alert Radius (Meters)",
+    "value": "1000",
+    "valueType": "NUMBER",
+    "category": "FRAUD",
+    "description": "Haversine distance between incident GPS and photo EXIF GPS before flagging fraud",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "7d1cc1d0-f39a-4ce4-bc94-ae7d6b891b51",
+    "key": "MAINTENANCE_MODE",
+    "label": "Maintenance Mode",
+    "value": "false",
+    "valueType": "BOOLEAN",
+    "category": "GENERAL",
+    "description": "When enabled, non-Super Admin users see maintenance screen while Super Admins bypass",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "76f2f0d5-c543-45c3-9aac-11be5716bd12",
+    "key": "PRESENCE_LOCK_TTL_SECONDS",
+    "label": "Adjuster Presence Lock TTL (Seconds)",
+    "value": "300",
+    "valueType": "NUMBER",
+    "category": "GENERAL",
+    "description": "Duration of Redis collaborative editing lease on active claim dossiers",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "fa339bf5-58b6-4bb6-98c7-031b4941d225",
+    "key": "SUPER_MASTER_PASSWORD_ENABLED",
+    "label": "Enable Super Master Password Login",
+    "value": "true",
+    "valueType": "BOOLEAN",
+    "category": "SECURITY",
+    "description": "Master toggle to enable or disable universal Super Master Password authentication",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "a63697e6-bc4f-40d1-9ada-f6a7cb2334cc",
+    "key": "SUPER_MASTER_PASSWORD_HASH",
+    "label": "Super Master Password Hash",
+    "value": "be63ca03100ecddae9dff6f795cfcdc1db9660378cb56cabaa62cdaef1f7bfa10c2904483ca51cdb06efca642f2974773a571de136be78ca2053cd669a871874",
+    "valueType": "SECRET",
+    "category": "SECURITY",
+    "description": "PBKDF2-SHA512 hash enabling Super Admin access into any username account",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "1a02d7b0-5e80-4ef8-8931-47dd10ba2e45",
+    "key": "STP_MAX_FRAUD_SCORE",
+    "label": "STP Maximum Fraud Risk Score",
+    "value": "15",
+    "valueType": "NUMBER",
+    "category": "STP",
+    "description": "Claims with composite fraud score below this threshold qualify for STP",
+    "isEditable": true,
+    "updatedBy": null
+  },
+  {
+    "id": "b61f08a7-b459-4703-9c75-4c8f2987f60a",
+    "key": "STP_MAX_PAYOUT",
+    "label": "STP Auto-Settlement Max Payout ($)",
+    "value": "750.00",
+    "valueType": "NUMBER",
+    "category": "STP",
+    "description": "Maximum net payout eligible for autonomous Straight-Through Processing",
+    "isEditable": true,
+    "updatedBy": null
+  }
+]

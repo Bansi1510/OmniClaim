@@ -226,11 +226,13 @@ export class UpdateDynamicMenuDto {
 
 export class CreatePermissionDto {
   @IsString() @IsNotEmpty() slug: string;
+  @IsOptional() @IsString() groupName?: string;
   @IsString() @IsNotEmpty() module: string;
   @IsString() @IsNotEmpty() description: string;
 }
 
 export class UpdatePermissionDto {
+  @IsOptional() @IsString() groupName?: string;
   @IsOptional() @IsString() module?: string;
   @IsOptional() @IsString() description?: string;
 }

@@ -96,8 +96,8 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
   for (const perm of permissionsData) {
     const record = await prisma.permission.upsert({
       where: { slug: perm.slug },
-      update: { description: perm.description, module: perm.module },
-      create: perm,
+      update: { description: perm.description, module: perm.module, displayName: perm.description },
+      create: { ...perm, displayName: perm.description },
     });
     createdPermissions.set(perm.slug, record.id);
   }

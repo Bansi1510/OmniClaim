@@ -1,0 +1,44 @@
+[
+  {
+    "id": "fafe95be-892c-43f8-b2f3-6195a71bff59",
+    "name": "Senior Claims Adjuster",
+    "slug": "CLAIMS_ADJUSTER",
+    "description": "Comprehensive claim assessment, approval, and phantom override rights",
+    "isSystem": true
+  },
+  {
+    "id": "816efece-d32e-4252-8ab7-5b464a98fe05",
+    "name": "Finance & Settlement Officer",
+    "slug": "FINANCE_OFFICER",
+    "description": "Disbursement authorization, double-entry ledger audits, and payout vouchers",
+    "isSystem": true
+  },
+  {
+    "id": "25e8aef1-1134-4d8f-8774-b5f541a6ecbb",
+    "name": "Junior Claims Adjuster",
+    "slug": "JUNIOR_ADJUSTER",
+    "description": "Claim intake, initial triage, and verification without final approval rights",
+    "isSystem": true
+  },
+  {
+    "id": "7ea7931d-9e0c-4347-ac7e-118a532a0586",
+    "name": "Policyholder / Claimant",
+    "slug": "POLICYHOLDER",
+    "description": "Driver / Vehicle Owner: policy application, claim submission and real-time tracking",
+    "isSystem": true
+  },
+  {
+    "id": "9a346de9-3235-4469-97fd-df73b626d880",
+    "name": "SIU Fraud Investigator",
+    "slug": "SIU_INVESTIGATOR",
+    "description": "Special Investigation Unit: deep fraud review, vector search, override justification",
+    "isSystem": true
+  },
+  {
+    "id": "8678d012-27af-43da-87ed-c3aa5fc1934f",
+    "name": "Super Administrator",
+    "slug": "SUPER_ADMIN",
+    "description": "Unrestricted enterprise administrative access — skips all permission checks globally",
+    "isSystem": true
+  }
+]

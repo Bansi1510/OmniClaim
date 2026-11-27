@@ -1,0 +1,248 @@
+[
+  {
+    "id": "0e4fa602-9b3d-4230-87e0-03670ff05acc",
+    "slug": "audit:read",
+    "module": "AUDIT",
+    "description": "Inspect immutable time-travel audit logs and lock leases"
+  },
+  {
+    "id": "a502af22-15ce-4f1d-bf15-58acadb1a227",
+    "slug": "presence:unlock",
+    "module": "AUDIT",
+    "description": "Force release active adjuster presence locks"
+  },
+  {
+    "id": "a15595a7-7c2f-4231-98ff-3f0063a2dece",
+    "slug": "claims:approve",
+    "module": "CLAIMS",
+    "description": "Grant formal adjuster approval for settlement"
+  },
+  {
+    "id": "8b33fbf3-4fc8-405b-9fcf-9ff7edc1e666",
+    "slug": "claims:create",
+    "module": "CLAIMS",
+    "description": "Submit new insurance claims"
+  },
+  {
+    "id": "a6418536-743f-4c82-b464-7b2f529561ac",
+    "slug": "claims:delete",
+    "module": "CLAIMS",
+    "description": "Delete claims from triage queue"
+  },
+  {
+    "id": "d4f54e7c-44cb-45fc-9cd0-a499311d745d",
+    "slug": "claims:read",
+    "module": "CLAIMS",
+    "description": "View claims list and detail views"
+  },
+  {
+    "id": "335b63e1-4ce5-4d17-b799-1fbc8912f0ff",
+    "slug": "claims:reject",
+    "module": "CLAIMS",
+    "description": "Formal claim rejection with dispute reason"
+  },
+  {
+    "id": "dfce2870-1258-414f-94d3-f637a7e61919",
+    "slug": "claims:settle",
+    "module": "CLAIMS",
+    "description": "Execute final financial claim settlement and voucher creation"
+  },
+  {
+    "id": "03679988-d0fe-4edc-9471-feda6025175e",
+    "slug": "claims:triage",
+    "module": "CLAIMS",
+    "description": "Perform initial claim triage and queue dispatch"
+  },
+  {
+    "id": "21b4f732-26e4-4593-a857-8464138c7895",
+    "slug": "claims:update",
+    "module": "CLAIMS",
+    "description": "Modify claim details and metadata"
+  },
+  {
+    "id": "6b63e480-c496-4894-b5ea-0a7e77fc26eb",
+    "slug": "fraud:flag",
+    "module": "FRAUD",
+    "description": "Create manual SIU fraud flags"
+  },
+  {
+    "id": "feef07d1-8f77-49f9-9767-1854ae02f720",
+    "slug": "fraud:investigate",
+    "module": "FRAUD",
+    "description": "Mark claim for deep SIU (Special Investigation Unit) audit"
+  },
+  {
+    "id": "9f89569f-7aac-4edd-ac59-9af38d44b0d8",
+    "slug": "fraud:override",
+    "module": "FRAUD",
+    "description": "Override triggered fraud flags with documented justification"
+  },
+  {
+    "id": "ab8f0d20-1ad2-41c5-b1f0-0839ced114f9",
+    "slug": "fraud:read",
+    "module": "FRAUD",
+    "description": "View fraud scorecards, indicators, and vector similarity reports"
+  },
+  {
+    "id": "02cc58eb-c8d1-4834-ba9e-19d416464599",
+    "slug": "ledger:export",
+    "module": "LEDGER",
+    "description": "Export GAAP/IFRS compliant financial audit statements"
+  },
+  {
+    "id": "faf759ed-f07b-48ae-9e23-4d7d0f84482f",
+    "slug": "ledger:override",
+    "module": "LEDGER",
+    "description": "Edit or void ledger vouchers and chart of accounts"
+  },
+  {
+    "id": "99d53618-3348-4da3-b323-133599afbb5f",
+    "slug": "ledger:post",
+    "module": "LEDGER",
+    "description": "Post manual or automated double-entry journal vouchers"
+  },
+  {
+    "id": "056985ff-1cd4-47d3-a134-c4692d590b72",
+    "slug": "ledger:read",
+    "module": "LEDGER",
+    "description": "Inspect general ledger journals and balance sheets"
+  },
+  {
+    "id": "79e80b44-21f5-40d5-88ee-779c09aeff28",
+    "slug": "ledger:reconcile",
+    "module": "LEDGER",
+    "description": "Mark ledger vouchers as reconciled"
+  },
+  {
+    "id": "2534f493-d44a-4c01-9ce5-cc43f13261b3",
+    "slug": "garages:manage",
+    "module": "MASTER_DATA",
+    "description": "Add, edit, blacklist, or delete repair garages"
+  },
+  {
+    "id": "8bf7f538-75d8-463a-a12f-8321a46378ca",
+    "slug": "parts:manage",
+    "module": "MASTER_DATA",
+    "description": "Full CRUD on parts catalog pricing and labor hours"
+  },
+  {
+    "id": "3f30015e-7098-42f0-acff-2a4031101369",
+    "slug": "parts:read",
+    "module": "MASTER_DATA",
+    "description": "View parts pricing catalog"
+  },
+  {
+    "id": "199d51f0-1aa9-4a10-bcae-1a76dbfd5504",
+    "slug": "parts:update",
+    "module": "MASTER_DATA",
+    "description": "Edit parts pricing catalog"
+  },
+  {
+    "id": "1a2cef95-81ea-424d-8d46-83feaa1747db",
+    "slug": "policies:manage",
+    "module": "MASTER_DATA",
+    "description": "Add, edit, activate, or delete insurance policies"
+  },
+  {
+    "id": "560990af-3c00-450b-94e9-bde286b6d878",
+    "slug": "rules:manage",
+    "module": "MASTER_DATA",
+    "description": "Add, edit, or delete dynamic STP, Fraud & Depreciation rules"
+  },
+  {
+    "id": "d074d38b-cd00-4e72-8774-5b2621cfa0ee",
+    "slug": "policies:apply",
+    "module": "POLICIES",
+    "description": "Apply for new insurance policies, upload docs, and pay quotes"
+  },
+  {
+    "id": "053392ab-99ee-4cf1-9811-a2ffdb68a23a",
+    "slug": "policies:read",
+    "module": "POLICIES",
+    "description": "View own or portfolio issued policies, endorsements, and renewals"
+  },
+  {
+    "id": "2d2f9e20-4dbd-4a6c-a114-430c653534d8",
+    "slug": "rbac:roles_assign",
+    "module": "RBAC",
+    "description": "Assign granular rights to roles"
+  },
+  {
+    "id": "63f9cdb6-7dfc-47ed-9fe1-a81625aeae84",
+    "slug": "rbac:roles_create",
+    "module": "RBAC",
+    "description": "Create new custom enterprise roles"
+  },
+  {
+    "id": "45ee9ce2-d0d7-4ead-9a89-20dc40599d50",
+    "slug": "rbac:roles_delete",
+    "module": "RBAC",
+    "description": "Delete non-system custom roles"
+  },
+  {
+    "id": "5bf65820-df7b-4f66-bb3f-9fdcc0346f13",
+    "slug": "rbac:roles_update",
+    "module": "RBAC",
+    "description": "Modify role definitions and attach/detach permissions"
+  },
+  {
+    "id": "c1123419-bec0-4706-88c1-473c9ebc4d9e",
+    "slug": "rbac:users_assign",
+    "module": "RBAC",
+    "description": "Create, edit, delete users and assign roles"
+  },
+  {
+    "id": "36e0a97c-af1e-4c02-aa06-3f4f1245b759",
+    "slug": "claims:override_reconciliation",
+    "module": "RECONCILIATION",
+    "description": "Manually override AI-detected phantom items"
+  },
+  {
+    "id": "8f9a5b41-8980-4e24-9c1a-e6d3c4f766b2",
+    "slug": "reports:export",
+    "module": "REPORTS",
+    "description": "Export GAAP financial and claim reports"
+  },
+  {
+    "id": "ab485bea-b2ef-45cb-9cd0-f495d738ae3e",
+    "slug": "reports:read",
+    "module": "REPORTS",
+    "description": "Inspect executive analytics and reports"
+  },
+  {
+    "id": "b1195fd2-3e43-4ee2-9b02-4aa4bc9780a1",
+    "slug": "menus:manage",
+    "module": "SETTINGS",
+    "description": "Dynamically add, edit, reorder, or hide navigation menus"
+  },
+  {
+    "id": "10149446-d786-4758-a053-6ea448ad44d3",
+    "slug": "settings:manage",
+    "module": "SETTINGS",
+    "description": "Modify dynamic system settings and master security controls"
+  },
+  {
+    "id": "70443719-65ee-4ad8-8721-c96a756f5359",
+    "slug": "superadmin:access",
+    "module": "SUPER_ADMIN",
+    "description": "Unrestricted Super Admin command center access (skips all checks)"
+  },
+  {
+    "id": "aa266a77-8f91-4289-a05b-073e6f2a0807",
+    "slug": "products:manage",
+    "module": "UNDERWRITING",
+    "description": "Configure insurance policy categories, products, and pricing plans"
+  },
+  {
+    "id": "1ab70625-7566-47e1-b52c-fb14020ca005",
+    "slug": "underwriting:approve",
+    "module": "UNDERWRITING",
+    "description": "Approve, request documents, or decline policy applications"
+  },
+  {
+    "id": "8577a90b-856f-40e7-bb18-eedd58b13f6b",
+    "slug": "underwriting:review",
+    "module": "UNDERWRITING",
+    "description": "Inspect pending policy applications and risk dossiers"
+  }
+]

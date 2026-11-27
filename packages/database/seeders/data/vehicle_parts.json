@@ -1,0 +1,80 @@
+[
+  {
+    "id": "742fbde9-8848-435f-8be0-55f49e4408f3",
+    "partCode": "PRT-BUMP-FRT",
+    "partName": "OEM Front Bumper Assembly",
+    "partType": "BUMPER_FRONT",
+    "materialType": "PLASTIC",
+    "oemBasePrice": "450",
+    "aftermarketPrice": "290",
+    "defaultLaborHours": 2.5,
+    "laborRatePerHour": "90",
+    "depreciationOverridePct": null,
+    "isActive": true
+  },
+  {
+    "id": "64d6fd44-3af0-4fe3-9a09-6b54e6251b66",
+    "partCode": "PRT-BUMP-RER",
+    "partName": "OEM Rear Bumper Cover",
+    "partType": "BUMPER_REAR",
+    "materialType": "PLASTIC",
+    "oemBasePrice": "410",
+    "aftermarketPrice": "260",
+    "defaultLaborHours": 2,
+    "laborRatePerHour": "90",
+    "depreciationOverridePct": null,
+    "isActive": true
+  },
+  {
+    "id": "72942da0-22c2-4f7e-8605-aabae4832807",
+    "partCode": "PRT-DOOR-FL",
+    "partName": "Driver Front Door Shell OEM",
+    "partType": "DOOR_FRONT_LEFT",
+    "materialType": "METAL",
+    "oemBasePrice": "920",
+    "aftermarketPrice": "640",
+    "defaultLaborHours": 4,
+    "laborRatePerHour": "95",
+    "depreciationOverridePct": null,
+    "isActive": true
+  },
+  {
+    "id": "f505ce31-9745-4772-be03-7f9ee4dfac2a",
+    "partCode": "PRT-HDLT-LFT",
+    "partName": "LED Headlight Assembly (Left)",
+    "partType": "HEADLIGHT_LEFT",
+    "materialType": "GLASS",
+    "oemBasePrice": "380",
+    "aftermarketPrice": "220",
+    "defaultLaborHours": 1,
+    "laborRatePerHour": "90",
+    "depreciationOverridePct": null,
+    "isActive": true
+  },
+  {
+    "id": "02a9ec52-2447-46df-a2dd-6a776e1081ec",
+    "partCode": "PRT-HOOD-OEM",
+    "partName": "Sheet Metal Hood / Bonnet Panel",
+    "partType": "HOOD_BONNET",
+    "materialType": "METAL",
+    "oemBasePrice": "680",
+    "aftermarketPrice": "460",
+    "defaultLaborHours": 3.5,
+    "laborRatePerHour": "95",
+    "depreciationOverridePct": null,
+    "isActive": true
+  },
+  {
+    "id": "264faf28-885e-42c3-87a5-3be5b37337b4",
+    "partCode": "PRT-WNDS-FRT",
+    "partName": "Acoustic Laminated Windshield",
+    "partType": "WINDSHIELD_FRONT",
+    "materialType": "GLASS",
+    "oemBasePrice": "520",
+    "aftermarketPrice": "340",
+    "defaultLaborHours": 2,
+    "laborRatePerHour": "85",
+    "depreciationOverridePct": null,
+    "isActive": true
+  }
+]

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { useDynamicStore } from '@/hooks/use-dynamic-store';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -21,6 +21,7 @@ import {
 
 export default function RoleRightsAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = React.use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { roles, permissionsCatalog, updateRolePermissions } = useDynamicStore();
   const { hasAnyPermission } = usePermissions();
@@ -36,15 +37,52 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
   const roleName = targetRole?.name || searchParams.get('name') || 'Role';
   const roleSlug = targetRole?.slug || searchParams.get('slug') || 'ROLE';
 
-  const moduleSections = useMemo(() => {
-    const map = new Map<string, { module: string; permissions: typeof permissionsCatalog }>();
+  const GROUP_MAP: Record<string, string> = {
+    POLICIES: 'Operations',
+    UNDERWRITING: 'Operations',
+    CLAIMS: 'Operations',
+    RECONCILIATION: 'Operations',
+    FRAUD: 'Operations',
+    LEDGER: 'Operations',
+    REPORTS: 'Operations',
+    MASTER_DATA: 'Administration',
+    RBAC: 'Administration',
+    SETTINGS: 'Administration',
+    AUDIT: 'Administration',
+    SUPER_ADMIN: 'Administration',
+  };
+
+  const groupSections = useMemo(() => {
+    const groups = new Map<string, Map<string, typeof permissionsCatalog>>();
     for (const p of permissionsCatalog) {
-      if (!map.has(p.module)) {
-        map.set(p.module, { module: p.module, permissions: [] });
+      const mod = p.module || 'GENERAL';
+      const groupName = p.groupName || GROUP_MAP[mod] || 'Administration';
+      if (!groups.has(groupName)) {
+        groups.set(groupName, new Map());
       }
-      map.get(p.module)!.permissions.push(p);
+      const modMap = groups.get(groupName)!;
+      if (!modMap.has(mod)) {
+        modMap.set(mod, []);
+      }
+      modMap.get(mod)!.push(p);
     }
-    return Array.from(map.values());
+
+    const orderedNames = [
+      'Operations',
+      'Administration',
+      ...Array.from(groups.keys()).filter((g) => g !== 'Operations' && g !== 'Administration'),
+    ];
+    return orderedNames
+      .filter((g) => groups.has(g))
+      .map((groupName) => {
+        const modMap = groups.get(groupName)!;
+        const modules = Array.from(modMap.entries()).map(([module, permissions]) => ({
+          module,
+          permissions,
+        }));
+        const allPermissions = modules.flatMap((m) => m.permissions);
+        return { groupName, modules, allPermissions };
+      });
   }, [permissionsCatalog]);
 
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
@@ -96,9 +134,11 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
     const nextPerms =
       targetRole.slug === 'SUPER_ADMIN' ? ['*'] : Array.from(selectedSlugs);
     updateRolePermissions(targetRole.id, nextPerms);
-    setToastMessage(`Rights for '${roleName}' updated live! Menus & buttons refreshed immediately.`);
+    setToastMessage(`Rights for '${roleName}' updated live! Redirecting to Roles...`);
     setIsDirty(false);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => {
+      router.push('/admin/roles');
+    }, 600);
   };
 
   return (
@@ -137,68 +177,104 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
         </div>
       )}
 
-      <div className="space-y-4">
-        {moduleSections.map((section) => {
-          const isOpen = openAccordions[section.module] ?? true;
-          const allSlugs = section.permissions.map((p) => p.slug);
-          const allSelected = allSlugs.every((s) => selectedSlugs.has(s));
-          const someSelected = allSlugs.some((s) => selectedSlugs.has(s)) && !allSelected;
+      <div className="columns-1 md:columns-2 gap-4 space-y-4">
+        {groupSections.map((group) => {
+          const isGroupOpen = openAccordions[group.groupName] ?? true;
+          const groupSlugs = group.allPermissions.map((p) => p.slug);
+          const groupAllSelected = groupSlugs.every((s) => selectedSlugs.has(s));
+          const groupSomeSelected = groupSlugs.some((s) => selectedSlugs.has(s)) && !groupAllSelected;
 
           return (
-            <div key={section.module} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between p-4 bg-muted/30 border-b border-border/60">
-                <div className="flex items-center gap-3">
+            <div key={group.groupName} className="break-inside-avoid rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+              {/* Level 1: Group Header */}
+              <div
+                onClick={() => toggleAccordion(group.groupName)}
+                className="flex items-center justify-between p-4 bg-muted/40 border-b border-border/60 cursor-pointer"
+              >
+                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
-                    id={`select-all-${section.module}`}
-                    checked={allSelected}
+                    id={`select-group-${group.groupName}`}
+                    checked={groupAllSelected}
                     disabled={!canEditRights}
                     ref={(el) => {
-                      if (el) el.indeterminate = someSelected;
+                      if (el) el.indeterminate = groupSomeSelected;
                     }}
-                    onChange={() => handleToggleModuleAll(section.permissions)}
+                    onChange={() => handleToggleModuleAll(group.allPermissions)}
                     className="h-4 w-4 rounded border-border text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  <label htmlFor={`select-all-${section.module}`} className="font-bold text-sm text-foreground cursor-pointer hover:text-primary">
-                    {section.module} MODULE ({section.permissions.length} Rights)
+                  <label htmlFor={`select-group-${group.groupName}`} className="font-bold text-sm text-foreground cursor-pointer hover:text-primary">
+                    {group.groupName} ({group.modules.length} Modules · {group.allPermissions.length} Rights)
                   </label>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => toggleAccordion(section.module)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleAccordion(group.groupName);
+                  }}
                   className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {isGroupOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
               </div>
 
-              {isOpen && (
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 bg-card">
-                  {section.permissions.map((perm) => {
-                    const isChecked = selectedSlugs.has(perm.slug);
+              {/* Level 2: Modules inside Group */}
+              {isGroupOpen && (
+                <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-card">
+                  {group.modules.map((mod) => {
+                    const modSlugs = mod.permissions.map((p) => p.slug);
+                    const modAllSelected = modSlugs.every((s) => selectedSlugs.has(s));
+                    const modSomeSelected = modSlugs.some((s) => selectedSlugs.has(s)) && !modAllSelected;
+
                     return (
-                      <div
-                        key={perm.slug}
-                        onClick={() => handleToggleSingle(perm.slug)}
-                        className={`flex items-start gap-3 rounded-lg border p-3 transition select-none ${
-                          canEditRights ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'
-                        } ${
-                          isChecked ? 'border-primary/40 bg-primary/5' : 'border-border/50 bg-background hover:bg-muted/30'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className="mt-0.5 h-4 w-4 rounded border-border text-primary pointer-events-none"
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-foreground">{perm.action}</span>
-                            <span className="text-[10px] font-mono text-primary font-semibold">{perm.slug}</span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{perm.description}</p>
+                      <div key={mod.module} className="rounded-lg border border-border/70 bg-muted/10 p-3 space-y-2.5">
+                        <div className="flex items-center gap-2 border-b border-border/50 pb-2">
+                          <input
+                            type="checkbox"
+                            id={`select-mod-${mod.module}`}
+                            checked={modAllSelected}
+                            disabled={!canEditRights}
+                            ref={(el) => {
+                              if (el) el.indeterminate = modSomeSelected;
+                            }}
+                            onChange={() => handleToggleModuleAll(mod.permissions)}
+                            className="h-3.5 w-3.5 rounded border-border text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <label htmlFor={`select-mod-${mod.module}`} className="text-xs font-bold text-foreground cursor-pointer">
+                            {mod.module} ({mod.permissions.length})
+                          </label>
+                        </div>
+
+                        {/* Level 3: Individual Rights inline */}
+                        <div className="flex flex-wrap gap-2">
+                          {mod.permissions.map((perm) => {
+                            const isChecked = selectedSlugs.has(perm.slug);
+                            return (
+                              <label
+                                key={perm.slug}
+                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition select-none ${
+                                  canEditRights ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'
+                                } ${
+                                  isChecked
+                                    ? 'border-primary/40 bg-primary/10 text-primary font-semibold'
+                                    : 'border-border bg-card text-muted-foreground hover:bg-muted/40'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  disabled={!canEditRights}
+                                  onChange={() => handleToggleSingle(perm.slug)}
+                                  className="h-3.5 w-3.5 rounded border-border text-primary"
+                                />
+                                <span className="font-medium text-xs capitalize">
+                                  {perm.action || perm.slug.split(':')[1] || perm.slug}
+                                </span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                     );

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "8fcac402-2460-45e7-bd75-c28451a566f1",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "code": "CAR",
+    "name": "Car / Passenger Sedan & SUV",
+    "description": "Private passenger cars, hatchbacks, sedans, and SUVs",
+    "icon": "Car",
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "5b4ef468-a23a-4705-8072-ed2104035443",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "code": "BIKE",
+    "name": "Bike / Motorcycle & Scooter",
+    "description": "Two-wheelers including motorcycles and scooters",
+    "icon": "Bike",
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "id": "7ac3a214-6659-4e99-9529-cf605c190b16",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "code": "BUS",
+    "name": "Bus & Passenger Fleet",
+    "description": "Commercial passenger buses and fleet coaches",
+    "icon": "Bus",
+    "sortOrder": 3,
+    "isActive": true
+  }
+]

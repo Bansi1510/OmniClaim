@@ -1,61 +1,4 @@
-## POLICY CREATION – IMAGE REQUIREMENT CONFIGURATION
-
-During policy product creation in Master Setup, add a checkbox:
-
-**Is Asset Image Required?**
-- Yes
-- No
-
-### 1. If Yes – Images Required
-
-When an administrator enables this checkbox:
-
-- Configure required asset images according to the selected asset category and type.
-- Select required views, angles, and components.
-- Define the minimum number of images.
-- Enable AI image verification.
-- Require successful image verification during policy application.
-- Save approved images as the original asset condition baseline.
-- Do not allow policy issuance until mandatory image requirements are completed and verified, subject to configured exceptions.
-
-When a customer submits a claim:
-- Require new damage images through guided camera capture.
-- Verify images using the Python AI service.
-- Compare claim images with the original policy baseline.
-- Identify newly observed and pre-existing damage.
-- Generate an AI damage assessment for Claims Officer review.
-
-### 2. If No – Images Not Required
-
-When an administrator disables this checkbox:
-
-- Do not show mandatory image capture during policy application.
-- Allow the policy application and issuance process without asset images.
-- Do not block claim submission because policy-time baseline images are unavailable.
-- Allow the customer to submit a claim directly through the normal claim workflow.
-- Claim-time evidence requirements must still follow the product's configured claim rules.
-- If images are later requested by the Claims Officer, allow the customer to upload them.
-
-### 3. Important Business Rules
-
-- This configuration must be stored against the policy product and copied as a snapshot into each issued policy.
-- Changing product settings later must not silently change existing policies.
-- Support exceptions only through authorized permissions and audit logs.
-- If no original baseline exists, AI must not claim that damage is definitely new or pre-existing.
-- Show a clear status in the Claims Officer dashboard: Baseline Available / Baseline Not Available.
-- Keep this functionality generic for all physical asset categories, not just vehicles.
-
-### 4. Database and API
-
-Add appropriate fields to the existing policy product and issued policy models:
-
-- `isAssetImageRequired`
-- `imageRequirementConfig`
-- `baselineCaptureStatus`
-
-Use the existing database architecture and avoid duplicate models.
-
-Validate the configuration on both frontend and backend. Enforce all mandatory image requirements through backend APIs, not just frontend checkboxes.datasource db {
+datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   extensions = [pgvector(map: "vector")]
@@ -73,6 +16,7 @@ generator client {
 model Permission {
   id          String           @id @default(uuid())
   slug        String           @unique // e.g. "claims:approve", "ledger:post", "rbac:manage"
+  groupName   String           @default("Operations")
   module      String           // e.g. "CLAIMS", "LEDGER", "RBAC", "FRAUD", "AUDIT"
   displayName String           // New: Human readable name
   description String

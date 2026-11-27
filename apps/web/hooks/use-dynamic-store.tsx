@@ -44,6 +44,7 @@ export interface DynamicRole {
 export interface DynamicPermission {
   id: string;
   slug: string;
+  groupName?: string;
   module: string;
   action: string;
   description: string;
@@ -610,6 +611,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
         '/api/v1/super-admin/permissions',
         {
           slug: perm.slug,
+          ...(perm.groupName ? { groupName: perm.groupName } : {}),
           module: perm.module,
           description: perm.description,
         },

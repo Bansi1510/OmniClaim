@@ -65,17 +65,18 @@ function friendlyLabel(label: string): string {
 }
 
 const MASTER_SETUP_ITEMS: Array<{
-  section: string;
+  href: string;
   label: string;
   permissions: string[];
 }> = [
-  { section: 'users', label: 'Users', permissions: ['rbac:users_assign', 'superadmin:access'] },
-  { section: 'roles', label: 'Roles & Rights', permissions: ['rbac:roles_create', 'rbac:roles_update', 'superadmin:access'] },
-  { section: 'categories', label: 'Policy Categories', permissions: ['products:manage', 'superadmin:access'] },
-  { section: 'vehicleTypes', label: 'Vehicle Types', permissions: ['products:manage', 'superadmin:access'] },
-  { section: 'products', label: 'Policy Products', permissions: ['products:manage', 'superadmin:access'] },
-  { section: 'garages', label: 'Repair Garages', permissions: ['garages:manage', 'superadmin:access'] },
-  { section: 'parts', label: 'Parts Catalog', permissions: ['parts:manage', 'parts:update', 'superadmin:access'] },
+  { href: '/master-setup/users', label: 'Users', permissions: ['rbac:users_assign', 'superadmin:access'] },
+  { href: '/master-setup/roles', label: 'Roles & Rights', permissions: ['rbac:roles_create', 'rbac:roles_update', 'superadmin:access'] },
+  { href: '/master-setup/permissions', label: 'Permissions', permissions: ['rbac:roles_create', 'rbac:roles_update', 'superadmin:access'] },
+  { href: '/master-setup/categories', label: 'Policy Categories', permissions: ['products:manage', 'superadmin:access'] },
+  { href: '/master-setup/vehicle-types', label: 'Vehicle Types', permissions: ['products:manage', 'superadmin:access'] },
+  { href: '/master-setup/products', label: 'Policy Products', permissions: ['products:manage', 'superadmin:access'] },
+  { href: '/master-setup/garages', label: 'Repair Garages', permissions: ['garages:manage', 'superadmin:access'] },
+  { href: '/master-setup/parts', label: 'Parts Catalog', permissions: ['parts:manage', 'parts:update', 'superadmin:access'] },
 ];
 
 const ADMIN_MENU_KEYS = new Set(['setup-rbac', 'audit-compliance']);
@@ -103,11 +104,11 @@ export function Sidebar() {
     'ledger-accounting': pathname.startsWith('/ledger'),
     'setup-rbac': pathname.startsWith('/admin'),
     'audit-compliance': pathname.startsWith('/audit'),
-    'master-setup': pathname === '/master-setup',
+    'master-setup': pathname.startsWith('/master-setup'),
   });
 
   useEffect(() => {
-    if (pathname === '/master-setup') {
+    if (pathname.startsWith('/master-setup')) {
       setOpenSubMenus((prev) => ({ ...prev, 'master-setup': true }));
     } else if (pathname.startsWith('/admin')) {
       setOpenSubMenus((prev) => ({ ...prev, 'setup-rbac': true }));
@@ -319,7 +320,7 @@ export function Sidebar() {
                           type="button"
                           onClick={() => toggleSubMenu('master-setup')}
                           className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                            pathname === '/master-setup'
+                            pathname.startsWith('/master-setup')
                               ? 'bg-primary/10 text-primary font-bold'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
@@ -338,12 +339,11 @@ export function Sidebar() {
                         {isMasterOpen && (
                           <div className="pl-6 space-y-1 pt-1 border-l border-border/40 ml-4">
                             {visibleMasterItems.map((item) => {
-                              const isActive =
-                                pathname === '/master-setup' && activeMasterSection === item.section;
+                              const isActive = pathname === item.href;
                               return (
                                 <Link
-                                  key={item.section}
-                                  href={`/master-setup?section=${item.section}`}
+                                  key={item.href}
+                                  href={item.href}
                                   className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
                                     isActive
                                       ? 'bg-primary/10 text-primary font-bold'

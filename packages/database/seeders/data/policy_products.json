@@ -1,0 +1,355 @@
+[
+  {
+    "id": "8b8c9a90-e2ae-4040-8805-395a5b3a23e2",
+    "productCode": "PRD-AUTO-BIKE-BASIC",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "5b4ef468-a23a-4705-8072-ed2104035443",
+    "name": "Basic Bike Policy",
+    "description": "Statutory liability and theft protection for motorcycles and scooters.",
+    "version": 1,
+    "baseRateAnnual": "195",
+    "minCoverageAmount": "5000",
+    "maxCoverageAmount": "35000",
+    "defaultDeductible": "150",
+    "termMonthsOptions": [
+      6,
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 15,
+      "autoApproveMaxCoverage": 35000
+    },
+    "eligibilityJson": {
+      "engineCcMin": 50
+    },
+    "exclusionsJson": [
+      "Stunt riding",
+      "Off-road racing"
+    ],
+    "addonsJson": [
+      "Pillion Rider Cover"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "1a3f1209-8dc8-4578-9f8f-e2fc93c4eba5",
+    "productCode": "PRD-AUTO-BIKE-COMP",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "5b4ef468-a23a-4705-8072-ed2104035443",
+    "name": "Comprehensive Bike Policy",
+    "description": "Complete accident collision, helmet, accessories, and natural disaster bike cover.",
+    "version": 1,
+    "baseRateAnnual": "360",
+    "minCoverageAmount": "8000",
+    "maxCoverageAmount": "60000",
+    "defaultDeductible": "100",
+    "termMonthsOptions": [
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC",
+      "DRIVER_LICENSE"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 12,
+      "autoApproveMaxCoverage": 50000
+    },
+    "eligibilityJson": {
+      "engineCcMin": 50
+    },
+    "exclusionsJson": [
+      "Unlicensed rider"
+    ],
+    "addonsJson": [
+      "Zero Depreciation",
+      "Helmet & Gear Cover"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "a14d4e65-bdbb-44ed-9078-d55960b68c13",
+    "productCode": "PRD-AUTO-BUS-PASS",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "7ac3a214-6659-4e99-9529-cf605c190b16",
+    "name": "Passenger Bus Policy",
+    "description": "Commercial passenger transit liability, windshield, and collision coverage for buses.",
+    "version": 1,
+    "baseRateAnnual": "2450",
+    "minCoverageAmount": "75000",
+    "maxCoverageAmount": "1500000",
+    "defaultDeductible": "1500",
+    "termMonthsOptions": [
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC",
+      "COMMERCIAL_PERMIT"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 12,
+      "autoApproveMaxCoverage": 100000
+    },
+    "eligibilityJson": {
+      "commercialPermitRequired": true
+    },
+    "exclusionsJson": [
+      "Overloading beyond seating capacity"
+    ],
+    "addonsJson": [
+      "Passenger Personal Accident",
+      "Towing & Recovery"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "283299bb-23e1-4e03-8e8f-8c176b62cd57",
+    "productCode": "PRD-AUTO-CAR-BASIC",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "8fcac402-2460-45e7-bd75-c28451a566f1",
+    "name": "Basic Car Policy",
+    "description": "Essential third-party liability and fire protection for everyday private cars.",
+    "version": 1,
+    "baseRateAnnual": "520",
+    "minCoverageAmount": "10000",
+    "maxCoverageAmount": "75000",
+    "defaultDeductible": "750",
+    "termMonthsOptions": [
+      6,
+      12
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 20,
+      "autoApproveMaxCoverage": 75000
+    },
+    "eligibilityJson": {
+      "usage": [
+        "PRIVATE"
+      ],
+      "vehicleAgeMaxYears": 20
+    },
+    "exclusionsJson": [
+      "Commercial rideshare use",
+      "Racing events"
+    ],
+    "addonsJson": [
+      "Roadside Assistance"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "2aba060b-f7c6-4567-959f-3ad1182c9365",
+    "productCode": "PRD-AUTO-CAR-PREM",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "8fcac402-2460-45e7-bd75-c28451a566f1",
+    "name": "Premium Car Policy",
+    "description": "VIP bumper-to-bumper cover with OEM parts guarantee, consumables cover, and rental reimbursement.",
+    "version": 1,
+    "baseRateAnnual": "1490",
+    "minCoverageAmount": "25000",
+    "maxCoverageAmount": "500000",
+    "defaultDeductible": "250",
+    "termMonthsOptions": [
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC",
+      "DRIVER_LICENSE"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 10,
+      "autoApproveMaxCoverage": 120000
+    },
+    "eligibilityJson": {
+      "usage": [
+        "PRIVATE",
+        "EXECUTIVE"
+      ],
+      "vehicleAgeMaxYears": 10
+    },
+    "exclusionsJson": [
+      "Intentional damage"
+    ],
+    "addonsJson": [
+      "Zero Depreciation",
+      "OEM Return-to-Invoice",
+      "Rental Car",
+      "Key Replacement"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "94bce94a-d0cb-4111-a839-e15de5698a7f",
+    "productCode": "PRD-AUTO-COMP-01",
+    "categoryId": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "vehicleTypeId": "8fcac402-2460-45e7-bd75-c28451a566f1",
+    "name": "Comprehensive Car Policy",
+    "description": "Full zero-depreciation glass & collision repair with direct garage cashless settlement.",
+    "version": 1,
+    "baseRateAnnual": "980",
+    "minCoverageAmount": "15000",
+    "maxCoverageAmount": "250000",
+    "defaultDeductible": "500",
+    "termMonthsOptions": [
+      6,
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "VEHICLE_RC",
+      "DRIVER_LICENSE"
+    ],
+    "underwritingRulesJson": {
+      "maxVehicleAgeYears": 15,
+      "autoApproveMaxCoverage": 75000
+    },
+    "eligibilityJson": {
+      "usage": [
+        "PRIVATE"
+      ],
+      "vehicleAgeMaxYears": 15
+    },
+    "exclusionsJson": [
+      "Wear and tear",
+      "Driving without valid license",
+      "DUI incidents"
+    ],
+    "addonsJson": [
+      "Zero Depreciation",
+      "Roadside Assistance",
+      "Engine Protection"
+    ],
+    "isActive": true
+  },
+  {
+    "id": "c0e4eb18-0702-44de-8826-b955342acd66",
+    "productCode": "PRD-HLTH-FAM-01",
+    "categoryId": "cf22f556-4545-454b-936d-603357df4b9b",
+    "vehicleTypeId": null,
+    "name": "OmniCare Family Floater",
+    "description": "Cashless hospital network, annual health checkup, and zero-wait emergency cover.",
+    "version": 1,
+    "baseRateAnnual": "1450",
+    "minCoverageAmount": "25000",
+    "maxCoverageAmount": "500000",
+    "defaultDeductible": "250",
+    "termMonthsOptions": [
+      12,
+      24
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "MEDICAL_DECLARATION"
+    ],
+    "underwritingRulesJson": {
+      "maxApplicantAge": 65,
+      "autoApproveMaxCoverage": 100000
+    },
+    "eligibilityJson": null,
+    "exclusionsJson": null,
+    "addonsJson": null,
+    "isActive": true
+  },
+  {
+    "id": "d6e4e57e-cab1-4f5e-94c2-838e1fd83cd2",
+    "productCode": "PRD-HOME-STD-01",
+    "categoryId": "89645a0b-eed6-4353-904f-0366690eb098",
+    "vehicleTypeId": null,
+    "name": "OmniHome Property Protector",
+    "description": "Covers structure, fire, flood, burglary, and valuable electronics contents.",
+    "version": 1,
+    "baseRateAnnual": "820",
+    "minCoverageAmount": "50000",
+    "maxCoverageAmount": "1000000",
+    "defaultDeductible": "1000",
+    "termMonthsOptions": [
+      12,
+      24,
+      36
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "PROPERTY_DEED"
+    ],
+    "underwritingRulesJson": {
+      "autoApproveMaxCoverage": 300000
+    },
+    "eligibilityJson": null,
+    "exclusionsJson": null,
+    "addonsJson": null,
+    "isActive": true
+  },
+  {
+    "id": "1859d523-fe0b-4b0b-934a-e12b342d1fd8",
+    "productCode": "PRD-LIFE-TRM-01",
+    "categoryId": "21e45230-15b7-43d6-8356-630515f7b1b8",
+    "vehicleTypeId": null,
+    "name": "OmniLife Term Assurance 20",
+    "description": "Pure high-value term life protection with terminal illness accelerated payout.",
+    "version": 1,
+    "baseRateAnnual": "640",
+    "minCoverageAmount": "100000",
+    "maxCoverageAmount": "2000000",
+    "defaultDeductible": "0",
+    "termMonthsOptions": [
+      12,
+      24,
+      60
+    ],
+    "requiredDocumentsJson": [
+      "ID_PROOF",
+      "INCOME_PROOF"
+    ],
+    "underwritingRulesJson": {
+      "autoApproveMaxCoverage": 250000
+    },
+    "eligibilityJson": null,
+    "exclusionsJson": null,
+    "addonsJson": null,
+    "isActive": true
+  },
+  {
+    "id": "77ee8ed9-1238-47db-9cbb-85c7dabb8488",
+    "productCode": "PRD-TRVL-GLB-01",
+    "categoryId": "9e539960-3929-4559-b210-6d3b2eef6b7b",
+    "vehicleTypeId": null,
+    "name": "OmniVoyage Worldwide Pass",
+    "description": "Instant travel issuance covering medical, passport loss, and trip cancellation.",
+    "version": 1,
+    "baseRateAnnual": "180",
+    "minCoverageAmount": "10000",
+    "maxCoverageAmount": "150000",
+    "defaultDeductible": "100",
+    "termMonthsOptions": [
+      1,
+      3,
+      6,
+      12
+    ],
+    "requiredDocumentsJson": [
+      "PASSPORT_ID"
+    ],
+    "underwritingRulesJson": {
+      "instantQuoteEligible": true
+    },
+    "eligibilityJson": null,
+    "exclusionsJson": null,
+    "addonsJson": null,
+    "isActive": true
+  }
+]

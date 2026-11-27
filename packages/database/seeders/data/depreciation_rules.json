@@ -1,0 +1,82 @@
+[
+  {
+    "id": "dep-rule-glass",
+    "name": "Automotive Glass Zero Depreciation",
+    "materialType": "GLASS",
+    "minVehicleAgeYears": 0,
+    "maxVehicleAgeYears": 100,
+    "depreciationPercent": 0,
+    "priority": 1,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-plastic",
+    "name": "Plastic & Composite Flat 50%",
+    "materialType": "PLASTIC",
+    "minVehicleAgeYears": 0,
+    "maxVehicleAgeYears": 100,
+    "depreciationPercent": 50,
+    "priority": 2,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-rubber",
+    "name": "Rubber & Seals Flat 50%",
+    "materialType": "RUBBER",
+    "minVehicleAgeYears": 0,
+    "maxVehicleAgeYears": 100,
+    "depreciationPercent": 50,
+    "priority": 3,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-metal-0-1",
+    "name": "Sheet Metal (0-1 Yr)",
+    "materialType": "METAL",
+    "minVehicleAgeYears": 0,
+    "maxVehicleAgeYears": 1,
+    "depreciationPercent": 0,
+    "priority": 4,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-metal-2",
+    "name": "Sheet Metal (2 Yrs)",
+    "materialType": "METAL",
+    "minVehicleAgeYears": 2,
+    "maxVehicleAgeYears": 2,
+    "depreciationPercent": 10,
+    "priority": 5,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-metal-3",
+    "name": "Sheet Metal (3 Yrs)",
+    "materialType": "METAL",
+    "minVehicleAgeYears": 3,
+    "maxVehicleAgeYears": 3,
+    "depreciationPercent": 20,
+    "priority": 6,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-metal-4",
+    "name": "Sheet Metal (4 Yrs)",
+    "materialType": "METAL",
+    "minVehicleAgeYears": 4,
+    "maxVehicleAgeYears": 4,
+    "depreciationPercent": 30,
+    "priority": 7,
+    "isActive": true
+  },
+  {
+    "id": "dep-rule-metal-5p",
+    "name": "Sheet Metal (5+ Yrs Cap)",
+    "materialType": "METAL",
+    "minVehicleAgeYears": 5,
+    "maxVehicleAgeYears": 100,
+    "depreciationPercent": 50,
+    "priority": 8,
+    "isActive": true
+  }
+]

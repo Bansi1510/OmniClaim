@@ -1,0 +1,41 @@
+[
+  {
+    "id": "e6132938-7394-4fd3-839c-8af277d10d7c",
+    "code": "GRG-APEX-02",
+    "name": "Apex Certified Auto Body",
+    "city": "Chicago",
+    "taxId": "EIN-36-918204",
+    "hourlyLaborRate": "95",
+    "rating": 4.6,
+    "isPreferredNetwork": true,
+    "isBlacklisted": false,
+    "phone": "+1-312-555-0144",
+    "email": "claims@apexbody.example"
+  },
+  {
+    "id": "27778f4d-e238-4302-9f90-1e225306e508",
+    "code": "GRG-METRO-01",
+    "name": "Metro Precision Collision Center",
+    "city": "New York",
+    "taxId": "EIN-88-291042",
+    "hourlyLaborRate": "90",
+    "rating": 4.8,
+    "isPreferredNetwork": true,
+    "isBlacklisted": false,
+    "phone": "+1-212-555-0192",
+    "email": "dispatch@metrocollision.example"
+  },
+  {
+    "id": "a86bd127-69c3-47e8-a13d-5347955c37c1",
+    "code": "GRG-SHADY-99",
+    "name": "QuickFix Unverified Motors",
+    "city": "Newark",
+    "taxId": "EIN-22-004910",
+    "hourlyLaborRate": "165",
+    "rating": 2.1,
+    "isPreferredNetwork": false,
+    "isBlacklisted": true,
+    "phone": "+1-973-555-0199",
+    "email": "billing@quickfix.example"
+  }
+]

@@ -17,6 +17,9 @@
     "db:migrate:status": "prisma migrate status",
     "db:migrate:reset": "prisma migrate reset --force",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "seeder:export": "node scripts/generate-seeder.js",
+    "seeder:run": "node seeders/run-seeders.js",
+    "seeder:reset-run": "node seeders/run-seeders.js --reset-raw",
     "db:setup": "prisma generate && prisma migrate deploy && tsx --env-file=.env prisma/seed.ts",
     "db:studio": "prisma studio",
     "lint": "tsc --noEmit"

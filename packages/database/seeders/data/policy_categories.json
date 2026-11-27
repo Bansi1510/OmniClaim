@@ -1,0 +1,52 @@
+[
+  {
+    "id": "55c32c70-e6f6-4ed3-8a28-2a624c3cec1f",
+    "code": "AUTO",
+    "name": "Auto & Motor Insurance",
+    "description": "Comprehensive collision, liability, and roadside protection for private and fleet vehicles.",
+    "icon": "Car",
+    "requiresUnderwriting": true,
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "cf22f556-4545-454b-936d-603357df4b9b",
+    "code": "HEALTH",
+    "name": "Health & Medical Cover",
+    "description": "In-patient hospitalization, critical illness, surgical and preventive family care.",
+    "icon": "HeartPulse",
+    "requiresUnderwriting": true,
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "id": "89645a0b-eed6-4353-904f-0366690eb098",
+    "code": "HOME",
+    "name": "Home & Property Shield",
+    "description": "Structural building protection, natural disaster, fire, theft, and home contents.",
+    "icon": "Home",
+    "requiresUnderwriting": true,
+    "sortOrder": 3,
+    "isActive": true
+  },
+  {
+    "id": "21e45230-15b7-43d6-8356-630515f7b1b8",
+    "code": "LIFE",
+    "name": "Term & Whole Life",
+    "description": "Guaranteed family income protection, accidental death benefit, and critical rider.",
+    "icon": "Shield",
+    "requiresUnderwriting": true,
+    "sortOrder": 4,
+    "isActive": true
+  },
+  {
+    "id": "9e539960-3929-4559-b210-6d3b2eef6b7b",
+    "code": "TRAVEL",
+    "name": "Global Travel Guard",
+    "description": "Emergency international medical evacuation, flight delay, and baggage loss protection.",
+    "icon": "Plane",
+    "requiresUnderwriting": false,
+    "sortOrder": 5,
+    "isActive": true
+  }
+]

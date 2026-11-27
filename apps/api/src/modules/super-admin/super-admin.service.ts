@@ -667,7 +667,9 @@ export class SuperAdminService {
     const created = await this.prisma.permission.create({
       data: {
         slug: dto.slug.toLowerCase(),
+        groupName: dto.groupName?.trim() || 'Operations',
         module: dto.module.toUpperCase(),
+        displayName: dto.description,
         description: dto.description,
       },
     });
@@ -679,6 +681,7 @@ export class SuperAdminService {
     const updated = await this.prisma.permission.update({
       where: { id },
       data: {
+        ...(dto.groupName ? { groupName: dto.groupName.trim() } : {}),
         ...(dto.module ? { module: dto.module.toUpperCase() } : {}),
         ...(dto.description ? { description: dto.description } : {}),
       },
