@@ -6,8 +6,12 @@ export type ClaimStatus =
   | 'TRIAGE_PENDING'
   | 'MANUAL_REVIEW'
   | 'APPROVED'
+  | 'PAYMENT_PENDING'
+  | 'PAYMENT_FAILED'
   | 'SETTLED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'DISPUTED'
+  | 'REOPENED';
 
 export type VehiclePartType =
   | 'BUMPER_FRONT'

@@ -2,6 +2,7 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const TOKEN_STORAGE_KEY = 'omniclaim_access_token';
+export const REFRESH_TOKEN_STORAGE_KEY = 'omniclaim_refresh_token';
 export const SESSION_STORAGE_KEY = 'omniclaim_auth_session_v2';
 
 function buildAuthHeaders(): Record<string, string> {
@@ -13,16 +14,6 @@ function buildAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-    }
-    try {
-      const rawSession = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (rawSession) {
-        const parsed = JSON.parse(rawSession);
-        if (parsed?.userId) headers['x-user-id'] = parsed.userId;
-        if (parsed?.userEmail) headers['x-user-email'] = parsed.userEmail;
-      }
-    } catch {
-      // ignore
     }
   }
 

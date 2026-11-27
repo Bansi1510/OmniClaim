@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, LedgerEntryType, JournalStatus } from '@omniclaim/database';
 import * as crypto from 'crypto';
@@ -10,21 +10,54 @@ export class LedgerService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Generates balanced double-entry vouchers for claim settlement in an atomic ACID transaction.
+   * Generates balanced double-entry vouchers for claim settlement in an atomic, idempotent ACID transaction.
    */
   async recordClaimSettlementVouchers(params: {
     claimId: string;
     settlementAmount: Prisma.Decimal;
     payoutMethod: 'ACH' | 'UPI' | 'STRIPE' | 'DIRECT_GARAGE';
     userId: string;
+    idempotencyKey?: string;
   }) {
-    const { claimId, settlementAmount, payoutMethod, userId } = params;
+    const { claimId, settlementAmount, payoutMethod, userId, idempotencyKey } = params;
 
     if (settlementAmount.lessThanOrEqualTo(0)) {
       throw new BadRequestException('Settlement amount must be positive to record payout ledger entries.');
     }
 
+    const effectiveKey = idempotencyKey || `SETTLE-${claimId}`;
+
     return await this.prisma.$transaction(async (tx) => {
+      // Idempotency & Duplicate Settlement Prevention Guard
+      const existingDisbursement =
+        (await tx.paymentDisbursement.findUnique({ where: { idempotencyKey: effectiveKey } })) ||
+        (await tx.paymentDisbursement.findFirst({ where: { claimId, status: 'SUCCEEDED' } }));
+
+      if (existingDisbursement) {
+        const [accrualJournal, paymentJournal, voucher] = await Promise.all([
+          tx.ledgerJournalEntry.findUnique({
+            where: { idempotencyKey: `ACCRUAL-${existingDisbursement.idempotencyKey}` },
+            include: { lines: true },
+          }),
+          tx.ledgerJournalEntry.findUnique({
+            where: { idempotencyKey: `PAYMENT-${existingDisbursement.idempotencyKey}` },
+            include: { lines: true },
+          }),
+          tx.settlementVoucher.findUnique({ where: { claimId } }),
+        ]);
+
+        this.logger.warn(
+          `Idempotent replay detected for Claim ${claimId} (key=${effectiveKey}); returning existing settlement voucher without duplicate posting.`,
+        );
+        return {
+          accrualJournal,
+          paymentJournal,
+          voucher,
+          disbursement: existingDisbursement,
+          idempotentReplay: true,
+        };
+      }
+
       // 1. Fetch standard chart of accounts
       const expenseAcct = await tx.ledgerAccount.findUniqueOrThrow({
         where: { accountNumber: '5001' }, // Direct Claims Expense
@@ -46,6 +79,7 @@ export class LedgerService {
       const accrualJournal = await tx.ledgerJournalEntry.create({
         data: {
           entryNumber: `ACCRUAL-${claimId}-${timestamp}`,
+          idempotencyKey: `ACCRUAL-${effectiveKey}`,
           claimId,
           description: `Accrual expense recognition for Claim ${claimId}`,
           status: JournalStatus.POSTED,
@@ -75,6 +109,7 @@ export class LedgerService {
       const paymentJournal = await tx.ledgerJournalEntry.create({
         data: {
           entryNumber: `PAYMENT-${claimId}-${timestamp}`,
+          idempotencyKey: `PAYMENT-${effectiveKey}`,
           claimId,
           description: `Disbursement payout via ${payoutMethod} for Claim ${claimId}`,
           status: JournalStatus.POSTED,
@@ -147,6 +182,18 @@ export class LedgerService {
         },
       });
 
+      const disbursement = await tx.paymentDisbursement.create({
+        data: {
+          idempotencyKey: effectiveKey,
+          claimId,
+          amount: settlementAmount,
+          payoutMethod,
+          status: 'SUCCEEDED',
+          gatewayReference: `GW-${voucherNumber}`,
+          initiatedById: userId,
+        },
+      });
+
       this.logger.log(
         `Balanced ledger vouchers posted for Claim ${claimId}. Amount: ${settlementAmount}. Voucher: ${voucherNumber}`,
       );
@@ -155,7 +202,66 @@ export class LedgerService {
         accrualJournal,
         paymentJournal,
         voucher,
+        disbursement,
+        idempotentReplay: false,
       };
+    });
+  }
+
+  /**
+   * Reverses a posted journal entry with an equal-and-opposite double-entry contra voucher
+   * and marks the original journal entry VOIDED (enforcing sum(Debits) === sum(Credits)).
+   */
+  async reverseJournalEntry(journalEntryId: string, reason: string, userId: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      const original = await tx.ledgerJournalEntry.findUnique({
+        where: { id: journalEntryId },
+        include: { lines: true },
+      });
+
+      if (!original) {
+        throw new NotFoundException(`Journal entry ${journalEntryId} not found.`);
+      }
+      if (original.status === JournalStatus.VOIDED) {
+        throw new BadRequestException(`Journal entry ${original.entryNumber} has already been voided/reversed.`);
+      }
+
+      const contraLines = original.lines.map((line) => ({
+        accountId: line.accountId,
+        type: line.type === LedgerEntryType.DEBIT ? LedgerEntryType.CREDIT : LedgerEntryType.DEBIT,
+        amount: line.amount,
+      }));
+
+      let debitTotal = new Prisma.Decimal(0);
+      let creditTotal = new Prisma.Decimal(0);
+      for (const l of contraLines) {
+        if (l.type === LedgerEntryType.DEBIT) debitTotal = debitTotal.add(l.amount);
+        else creditTotal = creditTotal.add(l.amount);
+      }
+      if (!debitTotal.equals(creditTotal)) {
+        throw new Error(`FATAL REVERSAL INVARIANT VIOLATION: Debits=${debitTotal}, Credits=${creditTotal}`);
+      }
+
+      await tx.ledgerJournalEntry.update({
+        where: { id: original.id },
+        data: { status: JournalStatus.VOIDED },
+      });
+
+      const reversal = await tx.ledgerJournalEntry.create({
+        data: {
+          entryNumber: `REV-${original.entryNumber}-${Date.now()}`,
+          reversalOfJournalId: original.id,
+          claimId: original.claimId,
+          description: `REVERSAL of ${original.entryNumber}: ${reason} (by ${userId})`,
+          status: JournalStatus.POSTED,
+          lines: {
+            create: contraLines,
+          },
+        },
+        include: { lines: true },
+      });
+
+      return { voidedOriginalId: original.id, reversalJournal: reversal };
     });
   }
 }

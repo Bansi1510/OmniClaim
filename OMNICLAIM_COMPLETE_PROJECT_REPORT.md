@@ -34,11 +34,11 @@
 
 | Workspace / Package | Path | Tech Stack & Responsibilities |
 | :--- | :--- | :--- |
-| **Web Portal** | `apps/web` | **Next.js 15.1.6** (App Router), **React 19**, Tailwind CSS 3.4, Radix UI (`dialog`, `dropdown-menu`, `slot`, `tooltip`), `lucide-react`, `next-themes`, `@tanstack/react-table` v8.11, `@tanstack/match-sorter-utils`. |
-| **Core Backend API** | `apps/api` | **NestJS 10.4**, Prisma Client 6.3, **PostgreSQL 16 + `pgvector`**, **Redis 7** (`ioredis`), `decimal.js`, `@nestjs/swagger` (OpenAPI), `class-validator`/`class-transformer`, Jest (7 suites / 44 unit tests). |
+| **Web Portal** | `apps/web` | **Next.js 15.1.6** (App Router, `17` routes), **React 19**, Tailwind CSS 3.4 (Light/Dark theme toggle), Radix UI, `lucide-react`, `@tanstack/react-table` v8.11 (`5, 10, 25, 50, All` pagination), `@tanstack/match-sorter-utils`. |
+| **Core Backend API** | `apps/api` | **NestJS 10.4**, Prisma Client, **PostgreSQL 16 + `pgvector`**, **Redis 7** (with memory fallback), `decimal.js`, `@nestjs/swagger` (OpenAPI), `class-validator`/`class-transformer`, Jest (`8` suites / `50` tests). |
 | **AI Inference Service** | `apps/ai-service` | **Python FastAPI 0.115+**, Uvicorn, Pydantic v2, **YOLOv8** (`ultralytics`), **PaddleOCR** (`paddlepaddle`/`paddleocr`), OpenCV (`opencv-python-headless`), `imagehash` (64-bit pHash), CLIP-style 512-d embeddings, HMAC-SHA256 signed webhook callbacks. |
 | **Mobile App** | `apps/mobile` | **Expo ~52.0.0**, **React Native 0.76.2**, `expo-camera`, `expo-location`, `expo-sensors` (gyroscope), offline evidence queue, sensor anti-spoofing, and Mobile Super Admin console. |
-| **Database Layer** | `packages/database` | Prisma schema (`schema.prisma` with `pgvector` extension), official SQL migrations (`20261126000000_init_omniclaim_enterprise`, `20261126010000_add_system_activity_audit_log`), idempotent `seed-engine.ts`. |
+| **Database Layer** | `packages/database` | Prisma schema (`schema.prisma` with `pgvector` extension, `44` live tables), `4` forward-only SQL migrations (`init`, `system_activity_audit_log`, `phase1_enterprise_hardening`, `add_policy_application_system`), idempotent `seed-engine.ts`. |
 | **Shared Types** | `packages/shared-types` | Shared TypeScript DTOs, domain enums, and constants consumed across `web`, `api`, and `mobile`. |
 | **Infrastructure** | `docker-compose.yml` | `pgvector/pgvector:pg16` (port `5432`), `redis:7-alpine` (port `6379`), `localstack/localstack` S3 (port `4566`). |
 
@@ -70,14 +70,15 @@
    - Labor items are approved if at least one physical damage is verified; unmatched part line items are marked **Phantom** (`isVerifiedByDamage = false`, `approvedCost = 0`, `systemDeduction = claimedCost`).
    - Adjusters with `claims:override_reconciliation` can manually override any line item with a mandatory audit reason.
 6. **Stage 6 — Deterministic Actuarial Math**:
-   - Computes `Decimal` parts gross total, material- & vehicle-age-specific depreciation, labor approved, applicable policy deductible, salvage value, and coverage limit cap to produce `netPayout` and `isStpQualified`.
+   - Reads active DB `DepreciationRule` rows and `STP_MAX_PAYOUT` settings inside the calculation transaction and stores `ruleVersion` + `ruleSnapshotJson` on `ActuarialAssessment` to preserve historical claim math.
 7. **Stage 7 — Multi-Factor Fraud Scoring & SIU Review**:
    - Evaluates GPS distance (Haversine), mock-location flags, phantom repair ratio, policy inception proximity, and `pgvector` cosine distance against historical claims.
    - Assigns composite score (`0–100`) and tier (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
    - SIU Investigators (`fraud:override`) can override individual indicators with documented justification, dynamically recalculating the composite score and tier.
-8. **Stage 8 — Straight-Through Processing (STP) vs. Human Triage**:
-   - If qualified (`netPayout <= $750`, `LOW` risk with score `< 15`, `0` discrepancies, active policy), STP automatically transitions `APPROVED -> SETTLED`, posts balanced ledger vouchers, and issues a `SettlementVoucher`.
-   - Otherwise, the claim transitions to `TRIAGE_PENDING` for adjuster review.
+8. **Stage 8 — Advisory Straight-Through Processing (STP) vs. Human Settlement**:
+   - Evaluates eligibility (`netPayout <= STP_MAX_PAYOUT`, `LOW` risk with score `< 15`, `0` discrepancies, active policy) and returns `STP_RECOMMENDED` or `MANUAL_REVIEW` with `requiresHumanPaymentAuthorization: true` — AI never directly authorizes payments or settles ledger vouchers.
+9. **Stage 9 — Policy Application, Underwriting & Issuance**:
+   - Customers apply via `/policies/apply` (`AUTO`, `HEALTH`, `HOME`, `LIFE`, `TRAVEL`), attach versioned documents, receive instant quotes (or go through `/underwriting`), complete idempotent `PolicyPayment` (`POLPAY-*`), and receive an active `Policy` with endorsement, renewal, and cancellation workflows.
 9. **Stage 9 — FSM Transition & OCC Locking + Collaborative Presence**:
    - Adjusters acquire a 60-second `ClaimLock` presence lease while inspecting `/claims/[id]`.
    - State transitions enforce the legal FSM transition matrix and Optimistic Concurrency Control (`where: { id, version: expectedVersion }` + `version: { increment: 1 }`), returning `409 Conflict` if another adjuster modified the claim concurrently.
@@ -99,11 +100,13 @@
 | **Finance & Settlement Officer** | `FINANCE_OFFICER` | `claims:read`, `claims:settle`, `ledger:read`, `ledger:post`, `ledger:reconcile`, `ledger:override`, `ledger:export`, `reports:read`, `reports:export`. |
 | **Policyholder / Claimant** | `POLICYHOLDER` | `claims:read`, `claims:create` — strictly scoped to **their own policies and claims only**; cannot view Fraud tabs/columns, payout override fields, other users' claims, Ledger, Audit, or Setup. |
 
-*(Plus runtime ability to create custom roles and assign/revoke any of the 36+ granular permissions via `/admin/roles`, `/admin/roles/[id]/rights`, or `/admin/rbac`.)*
+*(Plus runtime ability to create multiple users per role, create custom roles, and assign/revoke any of the 41 granular permissions via `/master-setup`, `/admin/roles`, `/admin/roles/[id]/rights`, or `/admin/rbac`.)*
 
-### 4.2 Granular Permissions Catalog (36 Seeded Slugs across 10 Modules)
+### 4.2 Granular Permissions Catalog (41 Seeded Slugs across 11 Modules)
 - **SUPER_ADMIN**: `superadmin:access`
 - **CLAIMS**: `claims:read`, `claims:create`, `claims:update`, `claims:delete`, `claims:triage`, `claims:approve`, `claims:reject`, `claims:settle`
+- **POLICIES**: `policies:apply`, `policies:read`
+- **UNDERWRITING**: `underwriting:review`, `underwriting:approve`, `products:manage`
 - **RECONCILIATION**: `claims:override_reconciliation`
 - **LEDGER**: `ledger:read`, `ledger:post`, `ledger:reconcile`, `ledger:override`, `ledger:export`
 - **FRAUD**: `fraud:read`, `fraud:override`, `fraud:flag`, `fraud:investigate`
@@ -126,8 +129,8 @@
   - `<RequirePageAccess>`: Wraps every protected Next.js page to block direct URL access if the role lacks permissions.
   - `<Can>` & `useRoleScope`: Controls button visibility, grid column visibility (e.g., Fraud Risk Score & Net Authorized Payout columns on `/claims`), modal editability, export permissions, and own-policy data filtering.
 - **Backend**:
-  - `DynamicPermissionsGuard`: Decodes Bearer JWT (or hydrates `x-user-id`), checks Redis cache (`user_permissions:{userId}`, 3600s TTL) with Prisma DB fallback, enforces `@RequirePermissions(...)`, and attaches `request.user.permissions`.
-  - `ClaimsController` + `ClaimsService`: Enforces `policyHolderId = user.id` filtering on `GET /api/v1/claims` and ownership check (`403 Forbidden`) on `GET /api/v1/claims/:id` for non-operational roles.
+  - `DynamicPermissionsGuard`: Enforces verified Bearer JWT authentication (no `x-user-id` fallback), checks Redis cache (`user_permissions:{userId}`, 3600s TTL) with Prisma DB fallback, enforces `@RequirePermissions(...)`, and attaches `request.user.permissions`.
+  - `ClaimsController` / `SuperAdminController` / `PolicyApplicationsController`: Enforce customer ownership scoping on claims, applications, policies, and `/super-admin/bootstrap` for non-operational policyholder roles.
 
 ---
 
@@ -197,6 +200,10 @@
 | `/admin/rbac` | Live Role × Permission Matrix `DataGrid` with grouped modules and instant checkbox toggling. |
 | `/admin/users` | System Users `DataGrid` with active/inactive toggling, user CRUD, Super Admin flag, and one-click `Login As` impersonation. |
 | `/super-admin` | All-Access Command Center (7 tabs): Overview & Impersonation (`God Mode` / `Target View` `DataGrid` + Security Stream `DataGrid`), Master Password Rotation & Live Settings `DataGrid`, Policies Master `DataGrid`, Parts & Depreciation `DataGrid`s, STP & Fraud Rules `DataGrid`, Repair Garages Network/Blacklist `DataGrid`, and Dynamic Sidebar Menu Builder + Permissions Catalog `DataGrid`s. |
+| `/master-setup` | Unified Master Setup Center (6 tabs with `5, 10, 25, 50, All` DataGrids): Multi-user creation per role, Roles & Rights, Policy Categories CRUD, Policy Products CRUD, Repair Garages CRUD, and Parts Catalog CRUD. |
+| `/policies/apply` | 5-step Customer Policy Application Wizard (Category/Plan -> Coverage & Risk -> Versioned Documents -> Quote Review -> Idempotent Payment & Instant Issuance). |
+| `/policies` | Customer/Admin Issued Policies & Applications `DataGrid` with Endorse (`+$10k`), Renew (`+1 Yr`), Cancel, and Pay Quoted Application actions. |
+| `/underwriting` | Underwriting Review Queue `DataGrid` for approving (`QUOTED` + loading), requesting documents (`DOCS_REQUIRED`), or declining (`REJECTED`) pending applications. |
 
 ---
 
@@ -247,7 +254,7 @@
 
 ## 10. Current Stubs, Gaps & Expansion Opportunities (For GPT Analysis)
 
-The core architecture, database schema, RBAC, DataGrid UI, FSM/OCC, Ledger, Audit, and Demo Seeder are fully wired and verified (`next build` 13/13 routes + Jest 7/7 suites, 44/44 tests passing). However, the following areas are currently **simulated, partial, or not yet built**—ideal starting points for GPT to propose next-phase enhancements:
+The core architecture, 44-table PostgreSQL schema (`4` forward-only migrations), RBAC, Light/Dark DataGrid UI (`5, 10, 25, 50, All` pagination), Policy Application/Underwriting/Issuance system, Master Setup Center, FSM/OCC, Ledger idempotency & reversals, Audit, and Demo Seeder are fully wired and verified (`next build` 17/17 routes + Jest 8/8 suites, 50/50 tests passing). The following infrastructure/integration enhancements remain optional future work:
 
 1. **Real Object Storage & Presigned Uploads**: `docker-compose.yml` provisions LocalStack S3 (`4566`), and `apps/ai-service/app/routers/inference.py` notes S3/R2 download, but currently passes synthetic byte buffers (`dummy_bytes`) into YOLO/OCR/Feature services and uses placeholder photo URIs on mobile/web. Full multipart upload + presigned S3/R2 URLs + EXIF extraction from real JPEG/PDF binaries are not yet wired.
 2. **Real Payment Rail & PDF Generation**: `SettlementVoucher` stores `pdfUrl` (`/vouchers/VCHR-....pdf`) and `payoutMethod` (`ACH`, `UPI`, `STRIPE`, `DIRECT_GARAGE`), but actual payment gateway adapters (Stripe Connect/Payouts, Razorpay/UPI, ACH Nacha/Plaid) and real PDF rendering (Puppeteer/PDFKit with scannable QR code) are not yet implemented.

@@ -6,14 +6,13 @@ import { Breadcrumb } from '@/components/common/breadcrumb';
 import { DataGrid, type GridColumn } from '@/components/common/data-grid';
 import type { GridAction } from '@/components/common/grid-action-menu';
 import { RequirePageAccess } from '@/components/auth/require-page-access';
-import { UserCheck, Shield, CheckCircle2, Plus, Edit2, Trash2, Crown, LogIn } from 'lucide-react';
+import { UserCheck, Shield, CheckCircle2, Plus, Edit2, Trash2, Crown } from 'lucide-react';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDynamicStore, DynamicUser } from '@/hooks/use-dynamic-store';
 import { Can } from '@/components/auth/can';
 
 export default function UserManagementPage() {
-  const router = useRouter();
-  const { isSystemAdmin, bypassAllPermissions, hasPermission, impersonateUser } = usePermissions();
+  const { isSystemAdmin, bypassAllPermissions, hasPermission } = usePermissions();
   const { users, roles, addUser, updateUser, deleteUser, refreshFromBackend } = useDynamicStore();
 
   const [showUserModal, setShowUserModal] = useState(false);
@@ -23,7 +22,7 @@ export default function UserManagementPage() {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('AdminOmniClaim2026!');
+  const [password, setPassword] = useState('OmniClaim@123');
   const [roleSlug, setRoleSlug] = useState('CLAIMS_ADJUSTER');
   const [isSuperAdminFlag, setIsSuperAdminFlag] = useState(false);
   const [isActiveFlag, setIsActiveFlag] = useState(true);
@@ -41,7 +40,7 @@ export default function UserManagementPage() {
     setFullName('');
     setUsername('');
     setEmail('');
-    setPassword('AdminOmniClaim2026!');
+    setPassword('OmniClaim@123');
     setRoleSlug(roles[1]?.slug || 'CLAIMS_ADJUSTER');
     setIsSuperAdminFlag(false);
     setIsActiveFlag(true);
@@ -96,21 +95,6 @@ export default function UserManagementPage() {
 
   // Role-wise row actions: each action is only returned when the active role holds the right.
   const rowActions = (user: DynamicUser): GridAction[] => [
-    ...(isSuper
-      ? [
-          {
-            key: 'login-as',
-            label: 'Login As',
-            title: 'Impersonate & Enter Account',
-            tone: 'warning' as const,
-            icon: LogIn,
-            onClick: () => {
-              impersonateUser(user.id, true);
-              router.push('/claims');
-            },
-          },
-        ]
-      : []),
     ...(canManageUsers
       ? [{ key: 'edit', label: 'Edit', icon: Edit2, onClick: () => handleOpenEdit(user) }]
       : []),

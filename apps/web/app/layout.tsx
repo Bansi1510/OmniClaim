@@ -5,8 +5,8 @@ import { PermissionsProvider } from '@/hooks/use-permissions';
 import { AppShell } from '@/components/layout/app-shell';
 
 export const metadata: Metadata = {
-  title: 'OmniClaim | Enterprise Super Admin & Dynamic Adjuster Center',
-  description: 'Automated Multi-Modal Auto Insurance Claim, Dynamic CRUD & Fraud Detection Engine',
+  title: 'OmniClaim | Insurance Policies & Claims Portal',
+  description: 'Simple, transparent insurance policy applications, underwriting, and claims management',
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className="min-h-screen bg-background font-sans antialiased text-foreground">
         <DynamicStoreProvider>
           <PermissionsProvider>

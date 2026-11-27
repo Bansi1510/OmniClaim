@@ -72,6 +72,11 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
     { slug: 'parts:update', module: 'MASTER_DATA', description: 'Edit parts pricing catalog' },
     { slug: 'parts:manage', module: 'MASTER_DATA', description: 'Full CRUD on parts catalog pricing and labor hours' },
     { slug: 'policies:manage', module: 'MASTER_DATA', description: 'Add, edit, activate, or delete insurance policies' },
+    { slug: 'policies:apply', module: 'POLICIES', description: 'Apply for new insurance policies, upload docs, and pay quotes' },
+    { slug: 'policies:read', module: 'POLICIES', description: 'View own or portfolio issued policies, endorsements, and renewals' },
+    { slug: 'underwriting:review', module: 'UNDERWRITING', description: 'Inspect pending policy applications and risk dossiers' },
+    { slug: 'underwriting:approve', module: 'UNDERWRITING', description: 'Approve, request documents, or decline policy applications' },
+    { slug: 'products:manage', module: 'UNDERWRITING', description: 'Configure insurance policy categories, products, and pricing plans' },
     { slug: 'rules:manage', module: 'MASTER_DATA', description: 'Add, edit, or delete dynamic STP, Fraud & Depreciation rules' },
     { slug: 'garages:manage', module: 'MASTER_DATA', description: 'Add, edit, blacklist, or delete repair garages' },
     { slug: 'settings:manage', module: 'SETTINGS', description: 'Modify dynamic system settings and master security controls' },
@@ -116,6 +121,7 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
       permissions: [
         'claims:read', 'claims:create', 'claims:update', 'claims:triage', 'claims:approve',
         'claims:reject', 'claims:override_reconciliation', 'parts:read', 'parts:update', 'reports:read',
+        'policies:read', 'underwriting:review', 'underwriting:approve',
       ],
     },
     {
@@ -142,9 +148,9 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
     {
       name: 'Policyholder / Claimant',
       slug: 'POLICYHOLDER',
-      description: 'Driver / Vehicle Owner: claim submission and real-time payout tracking',
+      description: 'Driver / Vehicle Owner: policy application, claim submission and real-time tracking',
       isSystem: true,
-      permissions: ['claims:read', 'claims:create'],
+      permissions: ['claims:read', 'claims:create', 'policies:apply', 'policies:read'],
     },
   ];
 
@@ -242,20 +248,23 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
   // 5. DYNAMIC NAVIGATION MENUS (EXACT COLLEGE ERP MENU STRUCTURE)
   // =========================================================================
   const menusData = [
-    { menuKey: 'claims-ops', label: 'Claims Operations', navLink: null, icon: 'FileText', parentKey: null, requiredPermission: 'claims:read', sortOrder: 1, isSystem: true },
+    { menuKey: 'apply_policy', label: 'Apply for Policy', navLink: '/policies/apply', icon: 'FilePlus', parentKey: null, requiredPermission: 'policies:apply', badgeName: 'New', badgeColor: 'bg-emerald-500/20 text-emerald-400', sortOrder: 1, isSystem: false },
+    { menuKey: 'my_policies', label: 'Policies Portfolio', navLink: '/policies', icon: 'ShieldCheck', parentKey: null, requiredPermission: 'policies:read', sortOrder: 2, isSystem: false },
+    { menuKey: 'underwriting_queue', label: 'Underwriting Queue', navLink: '/underwriting', icon: 'ClipboardCheck', parentKey: null, requiredPermission: 'underwriting:review', sortOrder: 3, isSystem: false },
+    { menuKey: 'claims-ops', label: 'Claims Operations', navLink: null, icon: 'FileText', parentKey: null, requiredPermission: 'claims:read', sortOrder: 4, isSystem: true },
     { menuKey: 'triage-queue', label: 'Triage Queue', navLink: '/claims', icon: 'Circle', parentKey: 'claims-ops', requiredPermission: 'claims:read', sortOrder: 1, isSystem: false },
     { menuKey: 'initiate-claim', label: 'Submit New Claim', navLink: '/claims?action=new', icon: 'Circle', parentKey: 'claims-ops', requiredPermission: 'claims:create', badgeName: 'Intake', badgeColor: 'bg-primary/20 text-primary', sortOrder: 2, isSystem: false },
-    { menuKey: 'fraud-siu', label: 'Fraud & SIU Unit', navLink: null, icon: 'ShieldAlert', parentKey: null, requiredPermission: 'fraud:read', sortOrder: 2, isSystem: true },
+    { menuKey: 'fraud-siu', label: 'Fraud & SIU Unit', navLink: null, icon: 'ShieldAlert', parentKey: null, requiredPermission: 'fraud:read', sortOrder: 5, isSystem: true },
     { menuKey: 'fraud-scorecards', label: 'Scorecard Audits', navLink: '/claims', icon: 'Circle', parentKey: 'fraud-siu', requiredPermission: 'fraud:read', sortOrder: 1, isSystem: false },
     { menuKey: 'pgvector-search', label: 'pgvector Similarity', navLink: '/claims/clm-003', icon: 'Circle', parentKey: 'fraud-siu', requiredPermission: 'fraud:read', badgeName: 'Vector', badgeColor: 'bg-teal-500/20 text-teal-400', sortOrder: 2, isSystem: false },
-    { menuKey: 'ledger-accounting', label: 'Financial Ledger', navLink: null, icon: 'BookOpen', parentKey: null, requiredPermission: 'ledger:read', sortOrder: 3, isSystem: true },
+    { menuKey: 'ledger-accounting', label: 'Financial Ledger', navLink: null, icon: 'BookOpen', parentKey: null, requiredPermission: 'ledger:read', sortOrder: 6, isSystem: true },
     { menuKey: 'general-journals', label: 'General Journals', navLink: '/ledger', icon: 'Circle', parentKey: 'ledger-accounting', requiredPermission: 'ledger:read', sortOrder: 1, isSystem: false },
     { menuKey: 'payout-vouchers', label: 'Chart of Accounts', navLink: '/ledger?tab=accounts', icon: 'Circle', parentKey: 'ledger-accounting', requiredPermission: 'ledger:read', sortOrder: 2, isSystem: false },
-    { menuKey: 'setup-rbac', label: 'Setup & Access Control', navLink: null, icon: 'Settings', parentKey: null, requiredPermission: 'rbac:roles_create', sortOrder: 4, isSystem: true },
+    { menuKey: 'setup-rbac', label: 'Setup & Access Control', navLink: null, icon: 'Settings', parentKey: null, requiredPermission: 'rbac:roles_create', sortOrder: 7, isSystem: true },
     { menuKey: 'roles-rights', label: 'Roles & Rights Setup', navLink: '/admin/roles', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:roles_create', sortOrder: 1, isSystem: false },
     { menuKey: 'permission-matrix', label: 'Permission Matrix Grid', navLink: '/admin/rbac', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:roles_create', sortOrder: 2, isSystem: false },
     { menuKey: 'user-access', label: 'User Role Assignment', navLink: '/admin/users', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:users_assign', sortOrder: 3, isSystem: false },
-    { menuKey: 'audit-compliance', label: 'Audit & Compliance', navLink: null, icon: 'History', parentKey: null, requiredPermission: 'audit:read', sortOrder: 5, isSystem: true },
+    { menuKey: 'audit-compliance', label: 'Audit & Compliance', navLink: null, icon: 'History', parentKey: null, requiredPermission: 'audit:read', sortOrder: 8, isSystem: true },
     { menuKey: 'field-audit', label: 'Field & Security Logs', navLink: '/audit', icon: 'Circle', parentKey: 'audit-compliance', requiredPermission: 'audit:read', sortOrder: 1, isSystem: false },
   ];
 
@@ -897,6 +906,244 @@ export async function seedOmniClaimDatabase(prisma: PrismaClient): Promise<SeedS
       update: {},
       create: act as any,
     });
+  }
+
+  // =========================================================================
+  // 11. POLICY CATEGORIES & PRODUCTS MASTER SEED (Idempotent)
+  // =========================================================================
+  const categoriesData = [
+    { code: 'AUTO', name: 'Auto & Motor Insurance', description: 'Comprehensive collision, liability, and roadside protection for private and fleet vehicles.', icon: 'Car', requiresUnderwriting: true, sortOrder: 1 },
+    { code: 'HEALTH', name: 'Health & Medical Cover', description: 'In-patient hospitalization, critical illness, surgical and preventive family care.', icon: 'HeartPulse', requiresUnderwriting: true, sortOrder: 2 },
+    { code: 'HOME', name: 'Home & Property Shield', description: 'Structural building protection, natural disaster, fire, theft, and home contents.', icon: 'Home', requiresUnderwriting: true, sortOrder: 3 },
+    { code: 'LIFE', name: 'Term & Whole Life', description: 'Guaranteed family income protection, accidental death benefit, and critical rider.', icon: 'Shield', requiresUnderwriting: true, sortOrder: 4 },
+    { code: 'TRAVEL', name: 'Global Travel Guard', description: 'Emergency international medical evacuation, flight delay, and baggage loss protection.', icon: 'Plane', requiresUnderwriting: false, sortOrder: 5 },
+  ];
+
+  const categoryIds = new Map<string, string>();
+  if ((prisma as any).policyCategory?.upsert) {
+    for (const cat of categoriesData) {
+      const record = await (prisma as any).policyCategory.upsert({
+        where: { code: cat.code },
+        update: { name: cat.name, description: cat.description, icon: cat.icon, sortOrder: cat.sortOrder },
+        create: { ...cat, isActive: true },
+      });
+      categoryIds.set(cat.code, record.id);
+    }
+  }
+
+  // Configurable Vehicle Types under Auto & Motor Insurance (CAR, BIKE, BUS)
+  const vehicleTypeIds = new Map<string, string>();
+  if ((prisma as any).vehicleType?.upsert && categoryIds.has('AUTO')) {
+    const autoCatId = categoryIds.get('AUTO')!;
+    const vTypes = [
+      { code: 'CAR', name: 'Car / Passenger Sedan & SUV', description: 'Private passenger cars, hatchbacks, sedans, and SUVs', icon: 'Car', sortOrder: 1 },
+      { code: 'BIKE', name: 'Bike / Motorcycle & Scooter', description: 'Two-wheelers including motorcycles and scooters', icon: 'Bike', sortOrder: 2 },
+      { code: 'BUS', name: 'Bus & Passenger Fleet', description: 'Commercial passenger buses and fleet coaches', icon: 'Bus', sortOrder: 3 },
+    ];
+    for (const vt of vTypes) {
+      const rec = await (prisma as any).vehicleType.upsert({
+        where: { categoryId_code: { categoryId: autoCatId, code: vt.code } },
+        update: { name: vt.name, description: vt.description, icon: vt.icon, sortOrder: vt.sortOrder, isActive: true },
+        create: { categoryId: autoCatId, ...vt, isActive: true },
+      });
+      vehicleTypeIds.set(vt.code, rec.id);
+    }
+  }
+
+  const productsData: Array<Record<string, any>> = [
+    {
+      productCode: 'PRD-AUTO-COMP-01',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'CAR',
+      name: 'Comprehensive Car Policy',
+      description: 'Full zero-depreciation glass & collision repair with direct garage cashless settlement.',
+      baseRateAnnual: 980.0,
+      minCoverageAmount: 15000.0,
+      maxCoverageAmount: 250000.0,
+      defaultDeductible: 500.0,
+      termMonthsOptions: [6, 12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC', 'DRIVER_LICENSE'],
+      underwritingRulesJson: { maxVehicleAgeYears: 15, autoApproveMaxCoverage: 75000 },
+      eligibilityJson: { vehicleAgeMaxYears: 15, usage: ['PRIVATE'] },
+      exclusionsJson: ['Wear and tear', 'Driving without valid license', 'DUI incidents'],
+      addonsJson: ['Zero Depreciation', 'Roadside Assistance', 'Engine Protection'],
+    },
+    {
+      productCode: 'PRD-AUTO-CAR-BASIC',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'CAR',
+      name: 'Basic Car Policy',
+      description: 'Essential third-party liability and fire protection for everyday private cars.',
+      baseRateAnnual: 520.0,
+      minCoverageAmount: 10000.0,
+      maxCoverageAmount: 75000.0,
+      defaultDeductible: 750.0,
+      termMonthsOptions: [6, 12],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC'],
+      underwritingRulesJson: { maxVehicleAgeYears: 20, autoApproveMaxCoverage: 75000 },
+      eligibilityJson: { vehicleAgeMaxYears: 20, usage: ['PRIVATE'] },
+      exclusionsJson: ['Commercial rideshare use', 'Racing events'],
+      addonsJson: ['Roadside Assistance'],
+    },
+    {
+      productCode: 'PRD-AUTO-CAR-PREM',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'CAR',
+      name: 'Premium Car Policy',
+      description: 'VIP bumper-to-bumper cover with OEM parts guarantee, consumables cover, and rental reimbursement.',
+      baseRateAnnual: 1490.0,
+      minCoverageAmount: 25000.0,
+      maxCoverageAmount: 500000.0,
+      defaultDeductible: 250.0,
+      termMonthsOptions: [12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC', 'DRIVER_LICENSE'],
+      underwritingRulesJson: { maxVehicleAgeYears: 10, autoApproveMaxCoverage: 120000 },
+      eligibilityJson: { vehicleAgeMaxYears: 10, usage: ['PRIVATE', 'EXECUTIVE'] },
+      exclusionsJson: ['Intentional damage'],
+      addonsJson: ['Zero Depreciation', 'OEM Return-to-Invoice', 'Rental Car', 'Key Replacement'],
+    },
+    {
+      productCode: 'PRD-AUTO-BIKE-BASIC',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'BIKE',
+      name: 'Basic Bike Policy',
+      description: 'Statutory liability and theft protection for motorcycles and scooters.',
+      baseRateAnnual: 195.0,
+      minCoverageAmount: 5000.0,
+      maxCoverageAmount: 35000.0,
+      defaultDeductible: 150.0,
+      termMonthsOptions: [6, 12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC'],
+      underwritingRulesJson: { maxVehicleAgeYears: 15, autoApproveMaxCoverage: 35000 },
+      eligibilityJson: { engineCcMin: 50 },
+      exclusionsJson: ['Stunt riding', 'Off-road racing'],
+      addonsJson: ['Pillion Rider Cover'],
+    },
+    {
+      productCode: 'PRD-AUTO-BIKE-COMP',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'BIKE',
+      name: 'Comprehensive Bike Policy',
+      description: 'Complete accident collision, helmet, accessories, and natural disaster bike cover.',
+      baseRateAnnual: 360.0,
+      minCoverageAmount: 8000.0,
+      maxCoverageAmount: 60000.0,
+      defaultDeductible: 100.0,
+      termMonthsOptions: [12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC', 'DRIVER_LICENSE'],
+      underwritingRulesJson: { maxVehicleAgeYears: 12, autoApproveMaxCoverage: 50000 },
+      eligibilityJson: { engineCcMin: 50 },
+      exclusionsJson: ['Unlicensed rider'],
+      addonsJson: ['Zero Depreciation', 'Helmet & Gear Cover'],
+    },
+    {
+      productCode: 'PRD-AUTO-BUS-PASS',
+      categoryCode: 'AUTO',
+      vehicleTypeCode: 'BUS',
+      name: 'Passenger Bus Policy',
+      description: 'Commercial passenger transit liability, windshield, and collision coverage for buses.',
+      baseRateAnnual: 2450.0,
+      minCoverageAmount: 75000.0,
+      maxCoverageAmount: 1500000.0,
+      defaultDeductible: 1500.0,
+      termMonthsOptions: [12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'VEHICLE_RC', 'COMMERCIAL_PERMIT'],
+      underwritingRulesJson: { maxVehicleAgeYears: 12, autoApproveMaxCoverage: 100000 },
+      eligibilityJson: { commercialPermitRequired: true },
+      exclusionsJson: ['Overloading beyond seating capacity'],
+      addonsJson: ['Passenger Personal Accident', 'Towing & Recovery'],
+    },
+    {
+      productCode: 'PRD-HLTH-FAM-01',
+      categoryCode: 'HEALTH',
+      name: 'OmniCare Family Floater',
+      description: 'Cashless hospital network, annual health checkup, and zero-wait emergency cover.',
+      baseRateAnnual: 1450.0,
+      minCoverageAmount: 25000.0,
+      maxCoverageAmount: 500000.0,
+      defaultDeductible: 250.0,
+      termMonthsOptions: [12, 24],
+      requiredDocumentsJson: ['ID_PROOF', 'MEDICAL_DECLARATION'],
+      underwritingRulesJson: { maxApplicantAge: 65, autoApproveMaxCoverage: 100000 },
+    },
+    {
+      productCode: 'PRD-HOME-STD-01',
+      categoryCode: 'HOME',
+      name: 'OmniHome Property Protector',
+      description: 'Covers structure, fire, flood, burglary, and valuable electronics contents.',
+      baseRateAnnual: 820.0,
+      minCoverageAmount: 50000.0,
+      maxCoverageAmount: 1000000.0,
+      defaultDeductible: 1000.0,
+      termMonthsOptions: [12, 24, 36],
+      requiredDocumentsJson: ['ID_PROOF', 'PROPERTY_DEED'],
+      underwritingRulesJson: { autoApproveMaxCoverage: 300000 },
+    },
+    {
+      productCode: 'PRD-LIFE-TRM-01',
+      categoryCode: 'LIFE',
+      name: 'OmniLife Term Assurance 20',
+      description: 'Pure high-value term life protection with terminal illness accelerated payout.',
+      baseRateAnnual: 640.0,
+      minCoverageAmount: 100000.0,
+      maxCoverageAmount: 2000000.0,
+      defaultDeductible: 0.0,
+      termMonthsOptions: [12, 24, 60],
+      requiredDocumentsJson: ['ID_PROOF', 'INCOME_PROOF'],
+      underwritingRulesJson: { autoApproveMaxCoverage: 250000 },
+    },
+    {
+      productCode: 'PRD-TRVL-GLB-01',
+      categoryCode: 'TRAVEL',
+      name: 'OmniVoyage Worldwide Pass',
+      description: 'Instant travel issuance covering medical, passport loss, and trip cancellation.',
+      baseRateAnnual: 180.0,
+      minCoverageAmount: 10000.0,
+      maxCoverageAmount: 150000.0,
+      defaultDeductible: 100.0,
+      termMonthsOptions: [1, 3, 6, 12],
+      requiredDocumentsJson: ['PASSPORT_ID'],
+      underwritingRulesJson: { instantQuoteEligible: true },
+    },
+  ];
+
+  if ((prisma as any).policyProduct?.upsert && categoryIds.size > 0) {
+    for (const prod of productsData) {
+      const catId = categoryIds.get(prod.categoryCode);
+      if (!catId) continue;
+      const vtId = prod.vehicleTypeCode ? vehicleTypeIds.get(prod.vehicleTypeCode) || null : null;
+      await (prisma as any).policyProduct.upsert({
+        where: { productCode: prod.productCode },
+        update: {
+          name: prod.name,
+          description: prod.description,
+          baseRateAnnual: prod.baseRateAnnual,
+          ...(vtId ? { vehicleTypeId: vtId } : {}),
+          ...(prod.eligibilityJson ? { eligibilityJson: prod.eligibilityJson } : {}),
+          ...(prod.exclusionsJson ? { exclusionsJson: prod.exclusionsJson } : {}),
+          ...(prod.addonsJson ? { addonsJson: prod.addonsJson } : {}),
+        },
+        create: {
+          productCode: prod.productCode,
+          categoryId: catId,
+          vehicleTypeId: vtId,
+          name: prod.name,
+          description: prod.description,
+          version: 1,
+          baseRateAnnual: prod.baseRateAnnual,
+          minCoverageAmount: prod.minCoverageAmount,
+          maxCoverageAmount: prod.maxCoverageAmount,
+          defaultDeductible: prod.defaultDeductible,
+          termMonthsOptions: prod.termMonthsOptions,
+          requiredDocumentsJson: prod.requiredDocumentsJson,
+          underwritingRulesJson: prod.underwritingRulesJson,
+          eligibilityJson: prod.eligibilityJson || null,
+          exclusionsJson: prod.exclusionsJson || null,
+          addonsJson: prod.addonsJson || null,
+          isActive: true,
+        },
+      });
+    }
   }
 
   return {

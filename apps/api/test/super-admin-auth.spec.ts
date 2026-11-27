@@ -209,5 +209,18 @@ describe('Super Master Password Auth & Super Admin Guard Bypass', () => {
     } as any;
 
     await expect(guard.canActivate(restrictedContext)).rejects.toThrow(ForbiddenException);
+
+    // Spoofed x-user-id header without Bearer JWT MUST be rejected with UnauthorizedException
+    const spoofedHeaderContext = {
+      getHandler: () => ({}),
+      getClass: () => ({}),
+      switchToHttp: () => ({
+        getRequest: () => ({
+          headers: { 'x-user-id': 'admin-seed-uuid' },
+        }),
+      }),
+    } as any;
+
+    await expect(guard.canActivate(spoofedHeaderContext)).rejects.toThrow(UnauthorizedException);
   });
 });

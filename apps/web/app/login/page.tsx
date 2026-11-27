@@ -76,9 +76,9 @@ export default function LoginPage() {
               Ω
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-foreground">OmniClaim Enterprise</h1>
+              <h1 className="text-xl font-black tracking-tight text-foreground">OmniClaim</h1>
               <p className="text-xs text-muted-foreground">
-                Unified RBAC &amp; Super Master Password Authentication
+                Sign in to manage your insurance policies and claims
               </p>
             </div>
           </div>

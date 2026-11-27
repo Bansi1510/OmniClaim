@@ -37,25 +37,28 @@ export class WebhookController {
     @Body() payload: any,
     @Headers('x-omniclaim-signature') signature: string,
   ) {
-    // 1. Verify HMAC-SHA256 signature
+    // 1. Enforce strict timing-safe HMAC-SHA256 verification across all environments
     const canonicalJson = JSON.stringify(payload);
     const expectedSignature = crypto
       .createHmac('sha256', this.hmacSecret)
       .update(canonicalJson)
       .digest('hex');
 
-    // In local dev, accept signature if matches or if development bypass flag is present
-    const isValid = signature && (signature === expectedSignature || process.env.NODE_ENV !== 'production');
+    const isValid =
+      typeof signature === 'string' &&
+      signature.length === expectedSignature.length &&
+      crypto.timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expectedSignature, 'utf8'));
+
     if (!isValid) {
-      this.logger.warn(`Rejected AI webhook for claim ${payload.claimId}: invalid HMAC signature`);
+      this.logger.warn(`Rejected AI webhook for claim ${payload?.claimId}: invalid HMAC signature`);
       throw new UnauthorizedException('Invalid HMAC-SHA256 signature.');
     }
 
     const { claimId, damages, billItems, imageFeatures } = payload;
     this.logger.log(`Processing AI inference results for claim ${claimId}...`);
 
-    return await this.prisma.$transaction(async (tx) => {
-      // 2. Persist Detected Damages
+    // 2. Persist AI evidence/damage/OCR records atomically without wrapping downstream independent transactions
+    await this.prisma.$transaction(async (tx) => {
       for (const d of damages || []) {
         await tx.detectedDamage.create({
           data: {
@@ -71,7 +74,6 @@ export class WebhookController {
         });
       }
 
-      // 3. Persist OCR Bill Items
       for (const item of billItems || []) {
         await tx.billLineItem.create({
           data: {
@@ -86,7 +88,6 @@ export class WebhookController {
         });
       }
 
-      // 4. Update Evidence Perceptual Hashes
       for (const feat of imageFeatures || []) {
         await tx.claimEvidence.update({
           where: { id: feat.evidenceId },
@@ -95,35 +96,35 @@ export class WebhookController {
           },
         });
       }
-
-      // 5. Run Reconciliation Engine
-      await this.reconciliationService.reconcileClaimBills(claimId);
-
-      // 6. Run Actuarial Depreciation Math
-      await this.actuarialService.computeNetPayout(claimId);
-
-      // 7. Run Multi-Factor Fraud Risk Engine
-      await this.fraudService.evaluateClaimFraud(claimId);
-
-      // 8. Evaluate Straight-Through Processing (STP)
-      const stpResult = await this.stpService.evaluateAndExecuteStp(claimId, 'ai-orchestrator-system');
-
-      // 9. If not STP qualified, transition from AI_PROCESSING to TRIAGE_PENDING
-      if (!stpResult.qualified) {
-        const claim = await tx.claim.findUniqueOrThrow({ where: { id: claimId } });
-        if (claim.status === ClaimStatus.AI_PROCESSING) {
-          await this.fsmService.executeTransition({
-            claimId,
-            targetStatus: ClaimStatus.TRIAGE_PENDING,
-            expectedVersion: claim.version,
-            userId: 'ai-orchestrator-system',
-            reason: 'AI Analysis complete; routed to Adjuster Triage queue',
-          });
-        }
-      }
-
-      this.logger.log(`AI completion pipeline successfully finished for claim ${claimId}`);
-      return { success: true, claimId, stpResult };
     });
+
+    // 3. Run downstream verification engines
+    await this.reconciliationService.reconcileClaimBills(claimId);
+    await this.actuarialService.computeNetPayout(claimId);
+    await this.fraudService.evaluateClaimFraud(claimId);
+
+    const systemUser = await this.prisma.user.findFirst({
+      where: { isSuperAdmin: true },
+      select: { id: true },
+    });
+    const actorUserId = systemUser?.id || 'ai-orchestrator-system';
+
+    // 4. Evaluate STP eligibility (advisory recommendation only; never directly settles payout)
+    const stpResult = await this.stpService.evaluateAndExecuteStp(claimId, actorUserId);
+
+    // 5. Route AI_PROCESSING -> TRIAGE_PENDING via FSM
+    const claim = await this.prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
+    if (claim.status === ClaimStatus.AI_PROCESSING && systemUser) {
+      await this.fsmService.executeTransition({
+        claimId,
+        targetStatus: ClaimStatus.TRIAGE_PENDING,
+        expectedVersion: claim.version,
+        userId: systemUser.id,
+        reason: `AI Analysis complete (${stpResult.recommendation}); routed to Adjuster Triage queue`,
+      });
+    }
+
+    this.logger.log(`AI completion pipeline successfully finished for claim ${claimId}`);
+    return { success: true, claimId, stpResult };
   }
 }

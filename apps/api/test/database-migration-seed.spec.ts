@@ -164,7 +164,7 @@ describe('Database Migration SQL & Full-Schema Idempotent Seeder Verification', 
     expect(run1.roles).toBe(6);
     expect(run1.users).toBe(5);
     expect(run1.settings).toBe(8);
-    expect(run1.menus).toBe(15);
+    expect(run1.menus).toBe(18);
     expect(run1.parts).toBe(6);
     expect(run1.depreciationRules).toBe(8);
     expect(run1.automationRules).toBe(4);

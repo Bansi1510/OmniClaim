@@ -2,13 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { DataGrid, type GridColumn } from '@/components/common/data-grid';
 import type { GridAction } from '@/components/common/grid-action-menu';
 import { RequirePageAccess } from '@/components/auth/require-page-access';
 import { usePermissions } from '@/hooks/use-permissions';
-import { useDynamicStore, type DynamicUser } from '@/hooks/use-dynamic-store';
+import { useDynamicStore } from '@/hooks/use-dynamic-store';
 import type { SystemSettingDto, SecurityAuditLogDto } from '@omniclaim/shared-types';
 import {
   PoliciesCrudTab,
@@ -31,7 +30,6 @@ import {
   Trash2,
   CheckCircle2,
   RotateCcw,
-  LogIn,
   Eye,
   EyeOff,
   ExternalLink,
@@ -47,11 +45,7 @@ type AdminTab =
   | 'menus';
 
 export default function SuperAdminDashboardPage() {
-  const router = useRouter();
-  const {
-    username,
-    impersonateUser,
-  } = usePermissions();
+  const { username } = usePermissions();
   const store = useDynamicStore();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -105,83 +99,13 @@ export default function SuperAdminDashboardPage() {
   };
 
   const TABS: Array<{ id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-    { id: 'overview', label: 'Overview & Impersonation', icon: Crown },
+    { id: 'overview', label: 'Overview & Security Audit', icon: Crown },
     { id: 'security', label: 'Master Password & Settings', icon: KeyRound },
     { id: 'policies', label: 'Policies Master', icon: ShieldCheck },
     { id: 'parts', label: 'Parts & Depreciation', icon: Wrench },
     { id: 'rules', label: 'STP & Fraud Rules', icon: Sliders },
     { id: 'garages', label: 'Repair Garages', icon: Building2 },
     { id: 'menus', label: 'Dynamic Menus & Perms', icon: MenuIcon },
-  ];
-
-  const impersonateColumns: GridColumn<DynamicUser>[] = [
-    {
-      id: 'user',
-      header: 'User & Handle',
-      minWidth: 180,
-      accessor: (u) => `${u.fullName} @${u.username} ${u.email}`,
-      cell: (u) => (
-        <div>
-          <div className="flex items-center gap-1.5 font-bold text-foreground">
-            <span>{u.fullName}</span>
-            {u.isSuperAdmin && <Crown className="h-3 w-3 text-amber-400" />}
-          </div>
-          <div className="font-mono text-[10px] text-muted-foreground">@{u.username} · {u.email}</div>
-        </div>
-      ),
-    },
-    {
-      id: 'roleSlug',
-      header: 'Role',
-      accessor: (u) => u.roleSlug,
-      cell: (u) => <span className="font-mono text-[11px] text-primary">{u.roleSlug}</span>,
-    },
-    {
-      id: 'isActive',
-      header: 'Status',
-      align: 'center',
-      filterOptions: [
-        { label: 'Active', value: 'Active' },
-        { label: 'Inactive', value: 'Inactive' },
-      ],
-      accessor: (u) => (u.isActive ? 'Active' : 'Inactive'),
-      cell: (u) => (
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
-          }`}
-        >
-          {u.isActive ? 'Active' : 'Inactive'}
-        </span>
-      ),
-    },
-  ];
-
-  const impersonateActions = (u: DynamicUser): GridAction[] => [
-    {
-      key: 'god-mode',
-      label: 'God Mode',
-      title: 'Enter account with all permissions bypassed',
-      icon: Crown,
-      tone: 'warning',
-      onClick: () => {
-        impersonateUser(u.id, true);
-        notify(`Entered as @${u.username} with Super Admin God Mode active.`);
-        router.push('/claims');
-      },
-    },
-    {
-      key: 'target-view',
-      label: 'Target View',
-      title: 'Preview exact permissions of this user',
-      icon: LogIn,
-      tone: 'primary',
-      onClick: () => {
-        impersonateUser(u.id, false);
-        notify(`Viewing exact permissions of @${u.username} (${u.roleSlug}).`);
-        router.push('/claims');
-      },
-    },
   ];
 
   const securityColumns: GridColumn<SecurityAuditLogDto>[] = [
@@ -403,26 +327,12 @@ export default function SuperAdminDashboardPage() {
           })}
         </div>
 
-        {/* TAB 1: OVERVIEW & ONE-CLICK USER IMPERSONATION */}
+        {/* TAB 1: SECURITY AUDIT STREAM */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <DataGrid<DynamicUser>
-              title="One-Click Impersonate Any User Account"
-              subtitle="Enter as any user with God Mode (skip permissions) or Target View (exact role rights)"
-              data={store.users}
-              columns={impersonateColumns}
-              rowKey={(u) => u.id}
-              actions={impersonateActions}
-              compact
-              pageSize={10}
-              enableGrouping={false}
-              exportFileName="omniclaim-impersonate-users"
-              searchPlaceholder="Search user, @username, role..."
-            />
-
+          <div className="space-y-6">
             <DataGrid<SecurityAuditLogDto>
               title="Security & Master Password Audit Stream"
-              subtitle="Live cryptographic log of logins, overrides, impersonations, and rotations"
+              subtitle="Live cryptographic log of logins, overrides, and rotations"
               data={store.securityAuditLogs}
               columns={securityColumns}
               rowKey={(l) => l.id}

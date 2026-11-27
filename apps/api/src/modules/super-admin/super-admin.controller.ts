@@ -8,6 +8,7 @@ import {
   Body,
   Query,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SuperAdminService } from './super-admin.service';
@@ -59,8 +60,11 @@ export class SuperAdminController {
 
   @Get('bootstrap')
   @ApiOperation({ summary: 'Hydrate entire web/mobile workspace with live PostgreSQL state' })
-  getBootstrapSnapshot() {
-    return this.superAdminService.getBootstrapSnapshot();
+  getBootstrapSnapshot(@CurrentUser() user?: AuthenticatedUser) {
+    if (!user?.id) {
+      throw new UnauthorizedException('Authentication required to bootstrap workspace.');
+    }
+    return this.superAdminService.getBootstrapSnapshot(user);
   }
 
   @Post('journals')

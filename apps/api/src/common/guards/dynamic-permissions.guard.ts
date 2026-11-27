@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -83,35 +84,14 @@ export class DynamicPermissionsGuard implements CanActivate {
       return true;
     }
 
-    const userId = request.user?.id || request.headers['x-user-id'];
+    const userId = request.user?.id;
 
     if (!userId) {
-      throw new ForbiddenException('Unauthenticated request: user context missing.');
+      throw new UnauthorizedException('Unauthenticated request: valid Bearer JWT token is required.');
     }
 
     const userPermissions = await this.getUserPermissions(userId);
-
-    if (!request.user) {
-      const dbUser = await this.prisma.user
-        .findUnique({
-          where: { id: userId },
-          include: { roles: { include: { role: true } } },
-        })
-        .catch(() => null);
-      request.user = {
-        id: userId,
-        username: dbUser?.username || undefined,
-        email: dbUser?.email || (request.headers['x-user-email'] as string) || '',
-        fullName: dbUser?.fullName || undefined,
-        roles: dbUser?.roles?.map((ur) => ur.role.slug) || [],
-        isSuperAdmin: Boolean(dbUser?.isSuperAdmin),
-        isMasterLogin: false,
-        bypassAllPermissions: false,
-        permissions: Array.from(userPermissions),
-      };
-    } else {
-      request.user.permissions = Array.from(userPermissions);
-    }
+    request.user.permissions = Array.from(userPermissions);
 
     // Wildcard '*' or SUPER_ADMIN marker skips all permission requirements
     if (userPermissions.has('*') || userPermissions.has('SUPER_ADMIN')) {

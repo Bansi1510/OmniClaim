@@ -30,9 +30,28 @@ export class RotateMasterPasswordDto {
   enabled?: boolean;
 }
 
-export class ImpersonateUserDto {
-  @ApiPropertyOptional({ example: true, description: 'Skip all permissions while impersonating' })
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'OmniClaim@123', description: 'Current user password' })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @ApiProperty({ example: 'MyPersonalPass#2026', description: 'New personal password (min 8 chars)' })
+  @IsString()
+  @MinLength(8)
+  newPassword: string;
+}
+
+export class RefreshTokenDto {
+  @ApiProperty({ description: 'Opaque refresh token previously returned by /auth/login or /auth/refresh' })
+  @IsString()
+  @IsNotEmpty()
+  refreshToken: string;
+}
+
+export class LogoutDto {
+  @ApiPropertyOptional({ description: 'Refresh token to revoke upon logout' })
   @IsOptional()
-  @IsBoolean()
-  bypassAllPermissions?: boolean;
+  @IsString()
+  refreshToken?: string;
 }

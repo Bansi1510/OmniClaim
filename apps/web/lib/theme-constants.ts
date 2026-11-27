@@ -49,6 +49,18 @@ export const CLAIM_STATUS_THEME: Record<
     borderClass: 'border-teal-500',
     icon: 'CheckCircle2',
   },
+  PAYMENT_PENDING: {
+    label: 'Payment Pending',
+    badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    borderClass: 'border-sky-500',
+    icon: 'Clock',
+  },
+  PAYMENT_FAILED: {
+    label: 'Payment Failed',
+    badgeClass: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+    borderClass: 'border-red-500',
+    icon: 'AlertTriangle',
+  },
   SETTLED: {
     label: 'Settled & Paid',
     badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold',
@@ -60,6 +72,18 @@ export const CLAIM_STATUS_THEME: Record<
     badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
     borderClass: 'border-rose-500',
     icon: 'XCircle',
+  },
+  DISPUTED: {
+    label: 'Disputed',
+    badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    borderClass: 'border-purple-500',
+    icon: 'AlertTriangle',
+  },
+  REOPENED: {
+    label: 'Reopened',
+    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    borderClass: 'border-amber-500',
+    icon: 'RefreshCw',
   },
 };
 

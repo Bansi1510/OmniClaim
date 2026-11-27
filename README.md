@@ -1,95 +1,115 @@
-# 🛡️ OmniClaim
-### Automated Multi-Modal Insurance Claim & Fraud Detection Engine
+# OmniClaim Enterprise
+
+**Insurance Policy Management, Automated Claims Processing, Fraud Review & Double-Entry Accounting Platform**
 
 [![Turborepo](https://img.shields.io/badge/Turborepo-Monorepo-ef4444.svg)](https://turbo.build/)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15_App_Router-black.svg)](https://nextjs.org/)
-[![NestJS](https://img.shields.io/badge/NestJS-Core_API-e0234e.svg)](https://nestjs.com/)
-[![Neon Postgres](https://img.shields.io/badge/Neon-pgvector-00e599.svg)](https://neon.tech/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Python_AI-009688.svg)](https://fastapi.tiangolo.com/)
-[![React Native](https://img.shields.io/badge/React_Native-Expo_SDK_52-22c55e.svg)](https://expo.dev/)
+[![NestJS 10](https://img.shields.io/badge/NestJS-10_Core_API-e0234e.svg)](https://nestjs.com/)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL_16-Prisma_%2B_pgvector-00e599.svg)](https://www.postgresql.org/)
+[![React Native](https://img.shields.io/badge/React_Native-Expo_Mobile-22c55e.svg)](https://expo.dev/)
 
 ---
 
-## 📌 Overview
+## Overview
 
-**OmniClaim** is an enterprise-tier insurtech engine that automates auto accident claims processing, eliminates phantom garage repair costs, detects fraud using vector similarity and geospatial anti-spoofing, and settles payouts using double-entry balanced accounting ledger transactions.
+**OmniClaim Enterprise** is a full-stack insurtech monorepo covering the complete insurance lifecycle:
+
+1. **Policy Catalog, Application & Issuance**: Multi-category products (`AUTO`, `HEALTH`, `HOME`, `LIFE`, `TRAVEL`), draft/resume applications, versioned supporting documents, Decimal-safe backend quoting, Underwriting Review Queue, idempotent premium payment, instant binding Policy issuance, endorsements, renewals, and cancellations.
+2. **Claims Management & Finite State Machine**: End-to-end claims intake, OCC-locked state transitions, supplemental claims/disputes/appeals, reopening workflows, and collaborative adjuster presence locks.
+3. **Bill Reconciliation & Actuarial Math**: Image damage vs. repair invoice diffing with confidence thresholds and human-review flags on unmatched labor, plus database-driven, versioned depreciation schedules (`DepreciationRule` + `STP_MAX_PAYOUT` snapshots).
+4. **Fraud Review & Ledger Separation of Duties**: Geospatial distance checks, mock-GPS flags, `pgvector` duplicate photo similarity (`<=>`), advisory Straight-Through Processing (STP) recommendations (AI never directly disburses funds), idempotent settlement disbursements, and equal-and-opposite double-entry journal reversals (`sum(Debits) === sum(Credits)`).
+5. **Dynamic RBAC, Master Setup & Global Audit Trail**: Runtime role and permission management, unified `/master-setup` CRUD console (create multiple users per role, manage roles, policy categories, products, garages, and parts), `DataGrid` (`5, 10, 25, 50, All` pagination + CSV/Excel export), and automatic HTTP request + field-diff audit logging (`SystemActivityAuditLog`).
 
 ---
 
-## 🏗️ Monorepo Architecture
+## Documentation Index
+
+| Guide | Purpose |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, security boundaries, Claim FSM, Policy Application lifecycle, and ledger invariants |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Complete REST endpoint catalog, request rules, and required RBAC permissions |
+| [docs/DATABASE.md](docs/DATABASE.md) | All 44 PostgreSQL tables, 4 forward-only Prisma migrations, and idempotent seeding |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Role-by-role plain-English walkthroughs for customers, adjusters, underwriters, finance, and admins |
+
+---
+
+## Monorepo Structure
 
 ```text
-omniclaim/
+OmniClaim/
 ├── apps/
-│   ├── web/             # Next.js 15 (Adjuster Command Center, BBox Annotator, RBAC Matrix)
-│   ├── api/             # NestJS (FSM, Actuarial Engine, Reconciliation, Ledger, RBAC)
-│   ├── ai-service/      # Python FastAPI (YOLOv8 Damage Detection, PaddleOCR Bill Extraction)
-│   └── mobile/          # React Native Expo (AR Ghost Alignment, Hardware Sensor Validation)
+│   ├── web/              # Next.js 15 + React 19 + Tailwind CSS (Light/Dark theme, DataGrid UI)
+│   ├── api/              # NestJS 10 REST API (Auth, Claims, FSM, Policy Apps, Actuarial, Ledger, RBAC, Audit)
+│   ├── ai-service/       # Python FastAPI service (YOLOv8 damage segmentation, PaddleOCR, embeddings)
+│   └── mobile/           # React Native Expo client
 ├── packages/
-│   ├── database/        # Neon PostgreSQL (Prisma ORM, pgvector, GAAP/IFRS Ledger, Dynamic RBAC)
-│   ├── shared-types/    # Shared TypeScript contracts and DTOs
-│   ├── tsconfig/        # Base TypeScript compiler configurations
-│   └── eslint-config/   # Monorepo linting standards
-└── docker-compose.yml   # PostgreSQL + pgvector, Redis (BullMQ), LocalStack S3
+│   ├── database/         # Prisma ORM schema, forward-only SQL migrations, and idempotent seeder
+│   ├── shared-types/     # Shared TypeScript DTOs and role presets
+│   ├── tsconfig/         # Shared TypeScript configs
+│   └── eslint-config/    # Monorepo ESLint config
+├── docs/                 # Regenerated enterprise documentation
+└── docker-compose.yml    # Local PostgreSQL (pgvector), Redis, and LocalStack S3
 ```
 
 ---
 
-## ⚡ Core Business Capabilities
-
-1. **Multi-Angle Camera Capture (Mobile)**: Sequential photo intake with gyroscope stability gate and hardware mock-GPS detection.
-2. **AI Damage & Invoice Perception (Python)**: YOLOv8 vehicle part damage segmentation + PaddleOCR bill line-item extraction.
-3. **Bill Reconciliation Engine (NestJS)**: Automatic diffing between physical damage and garage billed items to eliminate unverified/phantom charges.
-4. **Actuarial Math Engine (NestJS)**: Deterministic arbitrary-precision depreciation schedules (Glass: 0%, Plastic: 50%, Metal: age-graduated 0–50%).
-5. **Multi-Factor Fraud Risk Engine (NestJS)**: Haversine GPS delta, hardware integrity checks, and pgvector cosine similarity search (`<=>`) for duplicate vehicle damage images.
-6. **Strict Finite State Machine (FSM)**: Race-condition-free claim lifecycle transitions protected by optimistic concurrency version locks (`version Int`).
-7. **GAAP/IFRS Double-Entry Ledger**: Balanced debit/credit payout voucher creation with strict atomic zero-sum verification ($\sum \text{Debits} \equiv \sum \text{Credits}$).
-8. **Dynamic Runtime RBAC**: Roles and permissions can be added, modified, and revoked at runtime through an interactive visual matrix with instant Redis cache invalidation.
-9. **Straight-Through Processing (STP)**: Instant automated settlement for low-risk, verified claims under $750 in under 45 seconds.
-
----
-
-## 🚀 Quick Start (Development)
+## Quick Start
 
 ### 1. Prerequisites
-- **Node.js**: v20+ or v24+
-- **pnpm**: `corepack enable` or `npm install -g pnpm`
-- **Docker**: For running PostgreSQL (pgvector) and Redis locally
-- **Python**: 3.11+ for the AI microservice
+- **Node.js**: v20+
+- **pnpm**: `npx --yes pnpm` (or global `pnpm`)
+- **PostgreSQL 16** with `pgvector` extension (local Docker or Neon PostgreSQL configured via `.env`)
+- **Redis 7** (optional in dev; `RedisService` falls back to an in-memory cache if Redis is not running)
+- **Python 3.11+** (optional, for running `apps/ai-service`)
 
-### 2. Infrastructure Setup
-```bash
-# Start PostgreSQL (pgvector), Redis, and LocalStack S3
-docker compose up -d
+### 2. Install & Configure Environment
+Configure `DATABASE_URL` and `JWT_SECRET` in `.env`, `packages/database/.env`, and `apps/api/.env` (see `.env.example` files in those directories; never commit `.env` files).
 
-# Install monorepo dependencies
-pnpm install
-
-# Run database migrations and seed chart of accounts + RBAC
-pnpm run db:push
-pnpm run db:seed
+```powershell
+npx --yes pnpm install
+npx --yes pnpm --filter @omniclaim/database exec prisma migrate deploy
+npx --yes pnpm --filter @omniclaim/database exec prisma generate
+npx --yes pnpm --filter @omniclaim/database run db:seed
 ```
 
-### 3. Run Development Servers
-```bash
-# Start all microservices in parallel via Turborepo
-pnpm run dev
+### 3. Build & Run
+
+```powershell
+# Build shared packages, API, and Web app
+npx --yes pnpm --filter @omniclaim/database build
+npx --yes pnpm --filter @omniclaim/shared-types build
+npx --yes pnpm --filter @omniclaim/api build
+npx --yes pnpm --filter @omniclaim/web build
+
+# Start Backend API (port 4000) and Web App (port 3000)
+cd apps/api; $env:PORT="4000"; node dist/src/main.js
+npx --yes pnpm --filter @omniclaim/web start -p 3000
 ```
 
-- **Web Dashboard**: `http://localhost:3000`
-- **NestJS Core Gateway**: `http://localhost:4000`
-- **FastAPI AI Microservice**: `http://localhost:8000/docs`
-- **Prisma Studio**: `pnpm run db:studio`
+- **Web Portal**: `http://localhost:3000`
+- **Login Page**: `http://localhost:3000/login`
+- **API Swagger Docs**: `http://localhost:4000/api/docs`
 
 ---
 
-## 🔒 Default Seed Credentials
+## Testing & Verification
 
-- **Admin User**: `admin@omniclaim.internal`
-- **Password**: `AdminOmniClaim2026!`
-- **Role**: `SUPER_ADMIN` (Full Dynamic Permissions)
+```powershell
+# Run API Jest unit & integration test suites (8 suites / 50 tests)
+npx --yes pnpm --filter @omniclaim/api test
+
+# Verify Prisma migration sync
+npx --yes pnpm --filter @omniclaim/database exec prisma migrate status
+```
 
 ---
 
-## 📄 License
-Enterprise InsurTech Blueprint — OmniClaim Platform.
+## Default Seed Accounts
+
+| Role | Username | Email | Password (`DEFAULT_SEED_PASSWORD`) |
+|---|---|---|---|
+| **Super Administrator** | `superadmin` | `admin@omniclaim.internal` | `AdminOmniClaim2026!` |
+| **Claims Adjuster / Underwriter** | `sarah.jenkins` | `adjuster.senior@omniclaim.internal` | `AdminOmniClaim2026!` |
+| **SIU Fraud Investigator** | `marcus.vance` | `fraud.siu@omniclaim.internal` | `AdminOmniClaim2026!` |
+| **Finance & Settlement Officer** | `david.sterling` | `finance.controller@omniclaim.internal` | `AdminOmniClaim2026!` |
+| **Policyholder / Customer** | `alex.rivera` | `policyholder.demo@omniclaim.internal` | `AdminOmniClaim2026!` |

@@ -7,12 +7,23 @@ import {
   Body,
   Query,
   Delete,
+  Res,
   UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { ClaimsService } from './claims.service';
-import { CreateClaimDto, UpdateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
+import {
+  CreateClaimDto,
+  UpdateClaimDto,
+  TransitionClaimDto,
+  AssignAdjusterDto,
+  CreateClaimSupplementDto,
+  ReopenClaimDto,
+  CaptureEvidenceDto,
+  StaffExceptionEvidenceDto,
+} from './dto/claims.dto';
 import { DynamicPermissionsGuard } from '../../common/guards/dynamic-permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -229,8 +240,8 @@ export class ClaimsController {
   }
 
   @Post(':id/settle')
-  @RequirePermissions('claims:settle')
-  @ApiOperation({ summary: 'Execute final double-entry balanced ledger settlement' })
+  @RequirePermissions('claims:settle', 'ledger:post')
+  @ApiOperation({ summary: 'Execute final double-entry balanced ledger settlement (requires finance ledger:post separation of duties)' })
   async settleClaim(
     @Param('id') id: string,
     @Body() dto: SettleClaimDto,
@@ -247,6 +258,7 @@ export class ClaimsController {
       settlementAmount: payout,
       payoutMethod: dto.payoutMethod,
       userId: user.id,
+      idempotencyKey: `SETTLE-${id}`,
     });
   }
 
@@ -279,6 +291,78 @@ export class ClaimsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.claimsService.acquireLock(id, user.id);
+  }
+
+  @Post(':id/supplements')
+  @RequirePermissions('claims:create')
+  @ApiOperation({ summary: 'Submit a supplemental claim, dispute, or appeal on an existing claim' })
+  async createSupplement(
+    @Param('id') id: string,
+    @Body() dto: CreateClaimSupplementDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const claim = await this.claimsService.getClaimById(id);
+    if (this.isRestrictedToOwnClaims(user) && claim.policy?.policyHolderId !== user.id) {
+      throw new ForbiddenException('You can only submit supplements for your own policies.');
+    }
+    return this.claimsService.createSupplement(id, dto, user.id);
+  }
+
+  @Post(':id/reopen')
+  @RequirePermissions('claims:approve')
+  @ApiOperation({ summary: 'Reopen a SETTLED or REJECTED claim via FSM with OCC lock check' })
+  async reopenClaim(
+    @Param('id') id: string,
+    @Body() dto: ReopenClaimDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.claimsService.reopenClaim(id, dto, user.id);
+  }
+
+  @Post(':id/evidence/capture')
+  @RequirePermissions('claims:create')
+  @ApiOperation({ summary: 'Upload guided live-camera claim evidence with server magic-byte validation and SHA-256 checksum' })
+  async uploadLiveCameraEvidence(
+    @Param('id') id: string,
+    @Body() dto: CaptureEvidenceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const claim = await this.claimsService.getClaimById(id);
+    if (this.isRestrictedToOwnClaims(user) && claim.policy?.policyHolderId !== user.id) {
+      throw new ForbiddenException('You can only capture evidence for claims belonging to your own policies.');
+    }
+    return this.claimsService.uploadLiveCameraEvidence(id, dto, user.id);
+  }
+
+  @Post(':id/evidence/staff-upload')
+  @RequirePermissions('claims:update')
+  @ApiOperation({ summary: 'Permission-controlled staff exception evidence upload with mandatory reason and audit trail' })
+  async uploadStaffExceptionEvidence(
+    @Param('id') id: string,
+    @Body() dto: StaffExceptionEvidenceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.claimsService.uploadStaffExceptionEvidence(id, dto, user.id);
+  }
+
+  @Get(':id/evidence/:evidenceId/file')
+  @RequirePermissions('claims:read')
+  @ApiOperation({ summary: 'Access-controlled retrieval of stored claim evidence image' })
+  async getEvidenceFile(
+    @Param('id') id: string,
+    @Param('evidenceId') evidenceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+  ) {
+    const claim = await this.claimsService.getClaimById(id);
+    if (this.isRestrictedToOwnClaims(user) && claim.policy?.policyHolderId !== user.id) {
+      throw new ForbiddenException('Access denied to claim evidence belonging to another policyholder.');
+    }
+    const file = await this.claimsService.getEvidenceFile(id, evidenceId);
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${file.fileName}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return res.send(file.buffer);
   }
 
   @Delete(':id/lock')

@@ -51,20 +51,40 @@ model User {
   id             String               @id @default(uuid())
   username       String?              @unique // Allows login by username OR email
   email          String               @unique
-  passwordHash   String
-  fullName       String
+  passwordHash       String
+  mustChangePassword Boolean              @default(false)
+  fullName           String
   isActive       Boolean              @default(true)
   isSuperAdmin   Boolean              @default(false) // Skips all RBAC permissions unconditionally
   roles          UserRole[]
   assignedClaims Claim[]              @relation("AdjusterClaims")
   transitionLogs ClaimTransitionLog[]
   auditLogs      ClaimAuditLog[]
-  activeLocks    ClaimLock[]
-  securityAudits SecurityAuditLog[]   @relation("SecurityAuditTargetUser")
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  activeLocks         ClaimLock[]
+  securityAudits      SecurityAuditLog[]   @relation("SecurityAuditTargetUser")
+  refreshTokens       RefreshToken[]
+  policyApplications  PolicyApplication[]  @relation("ApplicantApplications")
+  underwritingReviews UnderwritingReview[] @relation("UnderwriterReviews")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([username])
+}
+
+model RefreshToken {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedByHash String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserRole {
@@ -89,8 +109,12 @@ enum ClaimStatus {
   TRIAGE_PENDING
   MANUAL_REVIEW
   APPROVED
+  PAYMENT_PENDING
+  PAYMENT_FAILED
   SETTLED
   REJECTED
+  DISPUTED
+  REOPENED
 }
 
 enum VehiclePartType {
@@ -133,23 +157,35 @@ enum DamageSeverity {
 }
 
 model Policy {
-  id             String   @id @default(uuid())
-  policyNumber   String   @unique
-  policyHolderId String
-  vehicleVin     String
-  vehicleMake    String
-  vehicleModel   String
-  vehicleYear    Int
-  coverageLimit  Decimal  @db.Decimal(12, 2)
-  baseDeductible Decimal  @db.Decimal(12, 2)
-  startDate      DateTime
-  endDate        DateTime
-  isActive       Boolean  @default(true)
-  claims         Claim[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String                @id @default(uuid())
+  policyNumber    String                @unique
+  policyHolderId  String
+  productId       String?
+  product         PolicyProduct?        @relation(fields: [productId], references: [id])
+  vehicleTypeId   String?
+  vehicleType     VehicleType?          @relation(fields: [vehicleTypeId], references: [id])
+  applicationId   String?               @unique
+  categoryCode    String                @default("AUTO")
+  annualPremium   Decimal               @default(1200.00) @db.Decimal(12, 2)
+  lifecycleStatus PolicyLifecycleStatus @default(ACTIVE)
+  vehicleVin      String
+  vehicleMake     String
+  vehicleModel    String
+  vehicleYear     Int
+  coverageLimit   Decimal               @db.Decimal(12, 2)
+  baseDeductible  Decimal               @db.Decimal(12, 2)
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean               @default(true)
+  claims          Claim[]
+  endorsements    PolicyEndorsement[]
+  renewals        PolicyRenewal[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@index([vehicleVin])
+  @@index([policyHolderId])
+  @@index([productId])
 }
 
 model Claim {
@@ -179,12 +215,49 @@ model Claim {
   journalEntries      LedgerJournalEntry[]
   settlementVoucher   SettlementVoucher?
   activeLock          ClaimLock?
+  supplements         ClaimSupplement[]
+  disbursements       PaymentDisbursement[]
 
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
   @@index([status])
   @@index([policyId])
+}
+
+model ClaimSupplement {
+  id              String   @id @default(uuid())
+  claimId         String
+  claim           Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  type            String   // "SUPPLEMENT" | "DISPUTE" | "APPEAL"
+  status          String   @default("OPEN") // "OPEN" | "UNDER_REVIEW" | "APPROVED" | "REJECTED"
+  requestedAmount Decimal  @default(0.00) @db.Decimal(12, 2)
+  approvedAmount  Decimal? @db.Decimal(12, 2)
+  reason          String
+  resolutionNotes String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([claimId])
+}
+
+model PaymentDisbursement {
+  id               String   @id @default(uuid())
+  idempotencyKey   String   @unique
+  claimId          String
+  claim            Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  amount           Decimal  @db.Decimal(14, 2)
+  payoutMethod     String
+  status           String   @default("PENDING") // "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REVERSED"
+  gatewayReference String?
+  failureReason    String?
+  retryCount       Int      @default(0)
+  initiatedById    String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([claimId])
 }
 
 model ClaimEvidence {
@@ -205,7 +278,21 @@ model ClaimEvidence {
   gyroscopeZ      Float?
   isMockLocation  Boolean                     @default(false)
 
-  damages         DetectedDamage[]
+  // Persistent storage metadata & document review versioning
+  fileName         String?
+  mimeType         String?
+  fileSizeBytes    Int?
+  storageKey       String?
+  version          Int                         @default(1)
+  reviewStatus     String                      @default("PENDING")
+  captureStep      String?                     // FRONT_VIEW | REAR_VIEW | LEFT_SIDE | RIGHT_SIDE | DAMAGE_CLOSEUP | NUMBER_PLATE | ADDITIONAL
+  captureSource    String                      @default("LIVE_CAMERA") // LIVE_CAMERA | STAFF_EXCEPTION
+  checksumSha256   String?
+  uploadedById     String?
+  serverUploadedAt DateTime                    @default(now())
+  exceptionReason  String?
+
+  damages          DetectedDamage[]
   createdAt       DateTime                    @default(now())
 
   @@index([claimId])
@@ -279,19 +366,24 @@ model ReconciliationSummary {
 }
 
 model ReconciledLineItem {
-  id                 String                @id @default(uuid())
-  summaryId          String
-  summary            ReconciliationSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-  billLineItemId     String                @unique
-  billLineItem       BillLineItem          @relation(fields: [billLineItemId], references: [id])
-  isVerifiedByDamage Boolean
-  matchedDamagePart  VehiclePartType?
-  systemDeduction    Decimal               @db.Decimal(12, 2)
-  approvedCost       Decimal               @db.Decimal(12, 2)
-  rejectionReason    String?
-  isManualOverride   Boolean               @default(false)
-  overrideReason     String?
-  createdAt          DateTime              @default(now())
+  id                  String                @id @default(uuid())
+  summaryId           String
+  summary             ReconciliationSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  billLineItemId      String                @unique
+  billLineItem        BillLineItem          @relation(fields: [billLineItemId], references: [id])
+  isVerifiedByDamage  Boolean
+  matchedDamagePart   VehiclePartType?
+  systemDeduction     Decimal               @db.Decimal(12, 2)
+  approvedCost        Decimal               @db.Decimal(12, 2)
+  rejectionReason     String?
+  isManualOverride    Boolean               @default(false)
+  overrideReason      String?
+  requiresHumanReview Boolean               @default(false)
+  confidence          Float?
+  evidenceMetadata    Json?
+  overrideById        String?
+  overriddenAt        DateTime?
+  createdAt           DateTime              @default(now())
 }
 
 model ActuarialAssessment {
@@ -308,6 +400,8 @@ model ActuarialAssessment {
   salvageValue         Decimal  @db.Decimal(12, 2) @default(0.00)
   netPayout            Decimal  @db.Decimal(12, 2)
   isStpQualified       Boolean  @default(false)
+  ruleVersion          String?
+  ruleSnapshotJson     Json?
   createdAt            DateTime @default(now())
 }
 
@@ -340,6 +434,8 @@ model FraudScorecard {
   riskTier       FraudRiskTier
   indicators     FraudIndicator[]
   notes          String?
+  modelVersion   String?
+  ruleVersion    String?
   createdAt      DateTime         @default(now())
 }
 
@@ -437,15 +533,17 @@ model LedgerAccount {
 }
 
 model LedgerJournalEntry {
-  id          String                  @id @default(uuid())
-  entryNumber String                  @unique // e.g. "JRNL-2026-00001"
-  claimId     String?
-  claim       Claim?                  @relation(fields: [claimId], references: [id])
-  description String
-  status      JournalStatus           @default(POSTED)
-  postedAt    DateTime                @default(now())
-  lines       LedgerTransactionLine[]
-  createdAt   DateTime                @default(now())
+  id                  String                  @id @default(uuid())
+  entryNumber         String                  @unique // e.g. "JRNL-2026-00001"
+  idempotencyKey      String?                 @unique
+  reversalOfJournalId String?
+  claimId             String?
+  claim               Claim?                  @relation(fields: [claimId], references: [id])
+  description         String
+  status              JournalStatus           @default(POSTED)
+  postedAt            DateTime                @default(now())
+  lines               LedgerTransactionLine[]
+  createdAt           DateTime                @default(now())
 
   @@index([claimId])
 }
@@ -670,4 +768,256 @@ model SystemActivityAuditLog {
   @@index([username])
   @@index([statusCode])
   @@index([createdAt])
+}
+
+// ==========================================
+// 8. POLICY CATEGORY, PRODUCT MASTER & APPLICATION SYSTEM
+// ==========================================
+
+enum PolicyApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  DOCS_REQUIRED
+  QUOTED
+  QUOTE_ACCEPTED
+  PAYMENT_PENDING
+  PAID
+  ISSUED
+  REJECTED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  GENERATED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum UnderwritingDecision {
+  PENDING
+  APPROVED
+  DECLINED
+  NEEDS_INFO
+}
+
+enum PolicyPaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PolicyLifecycleStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  RENEWED
+  SUSPENDED
+}
+
+model PolicyCategory {
+  id                   String          @id @default(uuid())
+  code                 String          @unique // AUTO, HEALTH, HOME, LIFE, TRAVEL
+  name                 String
+  description          String
+  icon                 String          @default("Shield")
+  requiresUnderwriting Boolean         @default(true)
+  sortOrder            Int             @default(0)
+  isActive             Boolean         @default(true)
+  vehicleTypes         VehicleType[]
+  products             PolicyProduct[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+model VehicleType {
+  id           String              @id @default(uuid())
+  categoryId   String
+  category     PolicyCategory      @relation(fields: [categoryId], references: [id])
+  code         String              // CAR, BIKE, BUS, TRUCK (Super Admin configurable)
+  name         String
+  description  String?
+  icon         String              @default("Car")
+  sortOrder    Int                 @default(0)
+  isActive     Boolean             @default(true)
+  products     PolicyProduct[]
+  applications PolicyApplication[]
+  policies     Policy[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([categoryId, code])
+  @@index([categoryId, isActive])
+}
+
+model PolicyProduct {
+  id                     String              @id @default(uuid())
+  productCode            String              @unique
+  categoryId             String
+  category               PolicyCategory      @relation(fields: [categoryId], references: [id])
+  vehicleTypeId          String?
+  vehicleType            VehicleType?        @relation(fields: [vehicleTypeId], references: [id])
+  name                   String
+  description            String
+  version                Int                 @default(1)
+  baseRateAnnual         Decimal             @db.Decimal(12, 2)
+  minCoverageAmount      Decimal             @db.Decimal(12, 2)
+  maxCoverageAmount      Decimal             @db.Decimal(12, 2)
+  defaultDeductible      Decimal             @db.Decimal(12, 2)
+  termMonthsOptions      Json                // e.g. [6, 12, 24]
+  requiredDocumentsJson  Json                // e.g. ["ID_PROOF", "VEHICLE_RC"]
+  underwritingRulesJson  Json?               // Risk thresholds for auto-quote vs underwriter review
+  eligibilityJson        Json?               // Category & vehicle-type eligibility constraints
+  exclusionsJson         Json?               // Policy exclusions list
+  addonsJson             Json?               // Optional riders/add-ons
+  isActive               Boolean             @default(true)
+  applications           PolicyApplication[]
+  policies               Policy[]
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@index([categoryId, isActive])
+  @@index([vehicleTypeId, isActive])
+}
+
+model PolicyApplication {
+  id                     String                      @id @default(uuid())
+  applicationNumber      String                      @unique
+  applicantUserId        String
+  applicant              User                        @relation("ApplicantApplications", fields: [applicantUserId], references: [id])
+  productId              String
+  product                PolicyProduct               @relation(fields: [productId], references: [id])
+  vehicleTypeId          String?
+  vehicleType            VehicleType?                @relation(fields: [vehicleTypeId], references: [id])
+  productVersionSnapshot Int                         @default(1)
+  status                 PolicyApplicationStatus     @default(DRAFT)
+  requestedCoverage      Decimal                     @db.Decimal(12, 2)
+  requestedDeductible    Decimal                     @db.Decimal(12, 2)
+  termMonths             Int                         @default(12)
+  desiredStartDate       DateTime?
+  applicantDetailsJson   Json                        // Full name, phone, address, DOB, ID number
+  riskDetailsJson        Json                        // Category-specific: VIN/make/model or property or health/travel details
+  nomineeDetailsJson     Json?
+  version                Int                         @default(0)
+  submittedAt            DateTime?
+  issuedPolicyId         String?                     @unique
+  documents              PolicyApplicationDocument[]
+  quotes                 InsuranceQuote[]
+  underwritingReviews    UnderwritingReview[]
+  payments               PolicyPayment[]
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  @@index([applicantUserId, status])
+  @@index([productId])
+}
+
+model PolicyApplicationDocument {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   PolicyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  docType       String            // ID_PROOF, VEHICLE_RC, INCOME_PROOF, INSPECTION_PHOTO, etc.
+  fileName      String
+  mimeType      String            @default("application/pdf")
+  fileSizeBytes Int               @default(0)
+  fileUrl       String
+  reviewStatus  String            @default("PENDING") // PENDING | VERIFIED | REJECTED
+  reviewNotes   String?
+  version       Int               @default(1)
+  uploadedById  String
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId])
+}
+
+model InsuranceQuote {
+  id                       String            @id @default(uuid())
+  quoteNumber              String            @unique
+  applicationId            String
+  application              PolicyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  status                   QuoteStatus       @default(GENERATED)
+  basePremium              Decimal           @db.Decimal(12, 2)
+  riskLoading              Decimal           @default(0.00) @db.Decimal(12, 2)
+  discountAmount           Decimal           @default(0.00) @db.Decimal(12, 2)
+  taxAmount                Decimal           @db.Decimal(12, 2)
+  totalPremium             Decimal           @db.Decimal(12, 2)
+  coverageAmount           Decimal           @db.Decimal(12, 2)
+  deductible               Decimal           @db.Decimal(12, 2)
+  termMonths               Int               @default(12)
+  calculationBreakdownJson Json
+  validUntil               DateTime
+  acceptedAt               DateTime?
+  createdAt                DateTime          @default(now())
+
+  @@index([applicationId])
+}
+
+model UnderwritingReview {
+  id              String               @id @default(uuid())
+  applicationId   String
+  application     PolicyApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId      String
+  reviewer        User                 @relation("UnderwriterReviews", fields: [reviewerId], references: [id])
+  decision        UnderwritingDecision @default(PENDING)
+  riskScore       Float?
+  premiumLoading  Decimal              @default(0.00) @db.Decimal(12, 2)
+  notes           String?
+  conditionsJson  Json?
+  reviewedAt      DateTime             @default(now())
+
+  @@index([applicationId])
+  @@index([reviewerId])
+}
+
+model PolicyPayment {
+  id               String              @id @default(uuid())
+  idempotencyKey   String              @unique
+  applicationId    String
+  application      PolicyApplication   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  quoteId          String?
+  amount           Decimal             @db.Decimal(12, 2)
+  paymentMethod    String              // CARD | ACH | UPI | STRIPE
+  status           PolicyPaymentStatus @default(PENDING)
+  gatewayReference String?
+  failureReason    String?
+  paidById         String
+  paidAt           DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([applicationId])
+}
+
+model PolicyEndorsement {
+  id              String   @id @default(uuid())
+  policyId        String
+  policy          Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  endorsementType String   // COVERAGE_CHANGE | DEDUCTIBLE_CHANGE | VEHICLE_UPDATE | BENEFICIARY_UPDATE
+  description     String
+  premiumDelta    Decimal  @default(0.00) @db.Decimal(12, 2)
+  changesJson     Json
+  effectiveDate   DateTime @default(now())
+  approvedById    String
+  createdAt       DateTime @default(now())
+
+  @@index([policyId])
+}
+
+model PolicyRenewal {
+  id              String   @id @default(uuid())
+  policyId        String
+  policy          Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  renewalNumber   String   @unique
+  previousEndDate DateTime
+  newStartDate    DateTime
+  newEndDate      DateTime
+  renewalPremium  Decimal  @db.Decimal(12, 2)
+  status          String   @default("COMPLETED") // PENDING | COMPLETED | LAPSED
+  renewedById     String
+  createdAt       DateTime @default(now())
+
+  @@index([policyId])
 }

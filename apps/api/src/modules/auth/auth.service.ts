@@ -8,7 +8,7 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthAuditEventType, SettingValueType } from '@omniclaim/database';
-import { LoginDto, RotateMasterPasswordDto } from './dto/auth.dto';
+import { LoginDto, RotateMasterPasswordDto, ChangePasswordDto } from './dto/auth.dto';
 
 export interface SignedTokenPayload {
   sub: string;
@@ -211,6 +211,7 @@ export class AuthService {
     };
 
     const accessToken = this.signAccessToken(tokenPayload);
+    const refreshToken = await this.issueRefreshToken(user.id, meta.ipAddress, meta.userAgent);
 
     await this.recordSecurityAudit({
       eventType: isMasterLogin
@@ -236,6 +237,7 @@ export class AuthService {
 
     return {
       accessToken,
+      ...(refreshToken ? { refreshToken } : {}),
       authMethod: isMasterLogin ? 'SUPER_MASTER_PASSWORD' : 'PASSWORD',
       user: {
         id: user.id,
@@ -248,6 +250,7 @@ export class AuthService {
         isSuperAdmin: hasSuperAdminRole,
         isMasterLogin,
         bypassAllPermissions,
+        mustChangePassword: Boolean((user as any).mustChangePassword),
       },
     };
   }
@@ -310,21 +313,86 @@ export class AuthService {
   }
 
   /**
-   * One-click impersonation for Super Admins into any target user account.
+   * Self-service password change for authenticated users (clears initial common password flag).
    */
-  async impersonateUser(
-    targetUserId: string,
-    actorIdentifier: string,
-    bypassAllPermissions: boolean = true,
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User account not found.');
+    }
+
+    const enteredHash = this.hashUserPassword(dto.currentPassword);
+    if (!this.safeCompareHex(enteredHash, user.passwordHash)) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: this.hashUserPassword(dto.newPassword),
+        mustChangePassword: false,
+      },
+    });
+
+    await this.recordSecurityAudit({
+      eventType: AuthAuditEventType.LOGIN_PASSWORD,
+      targetUserId: user.id,
+      actorIdentifier: user.username || user.email,
+      platform: 'WEB',
+      metadata: { selfServicePasswordChange: true },
+    });
+
+    return {
+      success: true,
+      message: 'Password updated successfully.',
+    };
+  }
+
+  private hashRefreshToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  async issueRefreshToken(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<string | null> {
+    if (!this.prisma.refreshToken?.create) {
+      return null;
+    }
+    const rawToken = crypto.randomBytes(48).toString('base64url');
+    const tokenHash = this.hashRefreshToken(rawToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      },
+    });
+    return rawToken;
+  }
+
+  async refreshAccessToken(
+    rawRefreshToken: string,
+    meta: { ipAddress?: string; userAgent?: string } = {},
   ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
+    if (!rawRefreshToken) {
+      throw new UnauthorizedException('Refresh token is required.');
+    }
+    const tokenHash = this.hashRefreshToken(rawRefreshToken);
+    const existing = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
       include: {
-        roles: {
+        user: {
           include: {
-            role: {
+            roles: {
               include: {
-                permissions: { include: { permission: true } },
+                role: {
+                  include: { permissions: { include: { permission: true } } },
+                },
               },
             },
           },
@@ -332,18 +400,58 @@ export class AuthService {
       },
     });
 
-    if (!user) {
-      throw new NotFoundException(`Target user ${targetUserId} not found.`);
+    if (!existing) {
+      throw new UnauthorizedException('Invalid refresh token.');
     }
 
+    // Reuse detection: if a revoked token is re-presented, revoke all active tokens for that user
+    if (existing.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: existing.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token has been revoked. Please sign in again.');
+    }
+
+    if (existing.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token has expired. Please sign in again.');
+    }
+
+    const user = existing.user;
+    if (!user.isActive) {
+      throw new ForbiddenException('Account is deactivated.');
+    }
+
+    const newRaw = crypto.randomBytes(48).toString('base64url');
+    const newHash = this.hashRefreshToken(newRaw);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.update({
+        where: { id: existing.id },
+        data: { revokedAt: new Date(), replacedByHash: newHash },
+      });
+      await tx.refreshToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: newHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      });
+    });
+
     const roleSlugs = user.roles.map((ur) => ur.role.slug);
-    const permissions = bypassAllPermissions
-      ? ['*']
-      : Array.from(
-          new Set(
-            user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.slug)),
-          ),
-        );
+    const hasSuperAdminRole = user.isSuperAdmin || roleSlugs.includes('SUPER_ADMIN');
+    const permissionsSet = new Set<string>();
+    if (hasSuperAdminRole) {
+      permissionsSet.add('*');
+    } else {
+      for (const ur of user.roles) {
+        for (const rp of ur.role.permissions) {
+          permissionsSet.add(rp.permission.slug);
+        }
+      }
+    }
 
     const tokenPayload = {
       sub: user.id,
@@ -351,24 +459,14 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       roles: roleSlugs,
-      isSuperAdmin: user.isSuperAdmin || roleSlugs.includes('SUPER_ADMIN'),
-      isMasterLogin: true,
-      bypassAllPermissions,
+      isSuperAdmin: hasSuperAdminRole,
+      isMasterLogin: false,
+      bypassAllPermissions: hasSuperAdminRole,
     };
 
-    const accessToken = this.signAccessToken(tokenPayload);
-
-    await this.recordSecurityAudit({
-      eventType: AuthAuditEventType.IMPERSONATION_START,
-      targetUserId: user.id,
-      actorIdentifier,
-      platform: 'WEB',
-      metadata: { targetEmail: user.email, bypassAllPermissions },
-    });
-
     return {
-      accessToken,
-      authMethod: 'IMPERSONATION',
+      accessToken: this.signAccessToken(tokenPayload),
+      refreshToken: newRaw,
       user: {
         id: user.id,
         username: tokenPayload.username,
@@ -376,12 +474,25 @@ export class AuthService {
         fullName: user.fullName,
         roles: roleSlugs,
         roleSlug: roleSlugs[0] || 'POLICYHOLDER',
-        permissions,
-        isSuperAdmin: tokenPayload.isSuperAdmin,
-        isMasterLogin: true,
-        bypassAllPermissions,
+        permissions: Array.from(permissionsSet),
+        isSuperAdmin: hasSuperAdminRole,
+        isMasterLogin: false,
+        bypassAllPermissions: hasSuperAdminRole,
+        mustChangePassword: Boolean((user as any).mustChangePassword),
       },
     };
+  }
+
+  async revokeRefreshToken(rawRefreshToken?: string) {
+    if (!rawRefreshToken) {
+      return { success: true };
+    }
+    const tokenHash = this.hashRefreshToken(rawRefreshToken);
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { success: true };
   }
 
   async getSecurityAuditLogs(limit = 50) {

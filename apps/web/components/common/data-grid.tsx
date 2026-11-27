@@ -392,7 +392,7 @@ export function DataGrid<T>({
   subtitle,
   searchPlaceholder = 'Search all columns...',
   pageSize = 10,
-  pageSizes = [10, 25, 50, 100],
+  pageSizes = [5, 10, 25, 50],
   loading = false,
   selectable = false,
   actions,
@@ -437,6 +437,7 @@ export function DataGrid<T>({
   const [activeHeaderFilterId, setActiveHeaderFilterId] = useState<string | null>(null);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(defaultVisibility);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize });
+  const [showAll, setShowAll] = useState(false);
   const chooserRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -566,7 +567,9 @@ export function DataGrid<T>({
 
   const effectivePagination = serverPagination
     ? { pageIndex: serverPagination.pageIndex, pageSize: serverPagination.pageSize }
-    : pagination;
+    : showAll
+      ? { pageIndex: 0, pageSize: Math.max(1, data.length) }
+      : pagination;
 
   const serverPageCount = serverPagination
     ? Math.max(1, Math.ceil(serverPagination.total / Math.max(1, serverPagination.pageSize)))
@@ -1314,19 +1317,43 @@ export function DataGrid<T>({
             Rows
             <select
               aria-label="Page size"
-              value={size}
+              value={
+                serverPagination
+                  ? serverPagination.pageSize >= Math.max(1, serverPagination.total) &&
+                    !pageSizes.includes(serverPagination.pageSize)
+                    ? 'ALL'
+                    : String(size)
+                  : showAll
+                    ? 'ALL'
+                    : String(pagination.pageSize)
+              }
               onChange={(e) => {
-                const nextSize = Number(e.target.value);
-                if (serverPagination) serverPagination.onPageSizeChange(nextSize);
-                else table.setPageSize(nextSize);
+                const raw = e.target.value;
+                if (raw === 'ALL') {
+                  if (serverPagination) {
+                    serverPagination.onPageSizeChange(Math.max(1, serverPagination.total));
+                  } else {
+                    setShowAll(true);
+                    setPagination((p) => ({ ...p, pageIndex: 0 }));
+                  }
+                  return;
+                }
+                const nextSize = Number(raw);
+                if (serverPagination) {
+                  serverPagination.onPageSizeChange(nextSize);
+                } else {
+                  setShowAll(false);
+                  setPagination({ pageIndex: 0, pageSize: nextSize });
+                }
               }}
               className="rounded border border-border bg-background px-1.5 py-0.5 text-xs font-semibold text-foreground"
             >
-              {Array.from(new Set([...pageSizes, pageSize, size])).sort((a, b) => a - b).map((s) => (
-                <option key={s} value={s}>
+              {Array.from(new Set([...pageSizes, pageSize])).sort((a, b) => a - b).map((s) => (
+                <option key={s} value={String(s)}>
                   {s}
                 </option>
               ))}
+              <option value="ALL">All</option>
             </select>
           </label>
           <span>

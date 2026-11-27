@@ -4,9 +4,21 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClaimFsmService } from '../fsm/claim-fsm.service';
-import { CreateClaimDto, UpdateClaimDto, TransitionClaimDto, AssignAdjusterDto } from './dto/claims.dto';
+import {
+  CreateClaimDto,
+  UpdateClaimDto,
+  TransitionClaimDto,
+  AssignAdjusterDto,
+  CreateClaimSupplementDto,
+  ReopenClaimDto,
+  CaptureEvidenceDto,
+  StaffExceptionEvidenceDto,
+} from './dto/claims.dto';
 import { ClaimStatus, FraudRiskTier } from '@omniclaim/database';
 
 @Injectable()
@@ -383,5 +395,226 @@ export class ClaimsService {
     });
 
     return { success: true, deletedClaimId: claimId, claimNumber: existing.claimNumber };
+  }
+
+  async createSupplement(claimId: string, dto: CreateClaimSupplementDto, userId: string) {
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!claim) {
+      throw new NotFoundException(`Claim ${claimId} not found.`);
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const supplement = await tx.claimSupplement.create({
+        data: {
+          claimId,
+          type: dto.type,
+          status: 'OPEN',
+          requestedAmount: dto.requestedAmount ?? 0,
+          reason: dto.reason,
+          createdById: userId,
+        },
+      });
+
+      if (
+        (dto.type === 'DISPUTE' || dto.type === 'APPEAL') &&
+        this.fsmService.isTransitionAllowed(claim.status, ClaimStatus.DISPUTED)
+      ) {
+        await this.fsmService.executeTransition({
+          claimId,
+          targetStatus: ClaimStatus.DISPUTED,
+          expectedVersion: claim.version,
+          userId,
+          reason: `${dto.type}: ${dto.reason}`,
+          tx,
+        });
+      }
+
+      return supplement;
+    });
+  }
+
+  async reopenClaim(claimId: string, dto: ReopenClaimDto, userId: string) {
+    return this.fsmService.executeTransition({
+      claimId,
+      targetStatus: ClaimStatus.REOPENED,
+      expectedVersion: dto.expectedVersion,
+      userId,
+      reason: dto.reason,
+    });
+  }
+
+  private readonly maxEvidenceBytes = 8 * 1024 * 1024;
+  private readonly evidenceRootDir = path.resolve(process.cwd(), 'uploads', 'evidence');
+
+  /**
+   * Validates raw decoded bytes against JPEG / PNG / WEBP magic headers, enforces max size,
+   * computes SHA-256 checksum, and writes securely into local object storage directory.
+   */
+  private parseAndStoreImageBuffer(claimId: string, evidenceId: string, base64Input: string) {
+    const cleanBase64 = base64Input.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '').trim();
+    if (!cleanBase64) {
+      throw new BadRequestException('Image payload cannot be empty.');
+    }
+
+    const buf = Buffer.from(cleanBase64, 'base64');
+    if (buf.length < 16) {
+      throw new BadRequestException('Invalid or corrupted image file.');
+    }
+    if (buf.length > this.maxEvidenceBytes) {
+      throw new BadRequestException('Image exceeds maximum allowed size of 8 MB.');
+    }
+
+    let detectedMime: string | null = null;
+    let ext = 'bin';
+
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+      detectedMime = 'image/jpeg';
+      ext = 'jpg';
+    } else if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+      detectedMime = 'image/png';
+      ext = 'png';
+    } else if (
+      buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buf.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      detectedMime = 'image/webp';
+      ext = 'webp';
+    }
+
+    if (!detectedMime) {
+      throw new BadRequestException(
+        'Unsupported or spoofed image format. Only valid JPEG, PNG, or WEBP camera images are accepted.',
+      );
+    }
+
+    const checksumSha256 = crypto.createHash('sha256').update(buf).digest('hex');
+    const safeClaimDir = path.basename(claimId);
+    const claimDir = path.join(this.evidenceRootDir, safeClaimDir);
+    fs.mkdirSync(claimDir, { recursive: true });
+
+    const fileName = `${evidenceId}.${ext}`;
+    const storageKey = `${safeClaimDir}/${fileName}`;
+    fs.writeFileSync(path.join(claimDir, fileName), buf);
+
+    return {
+      mimeType: detectedMime,
+      fileName,
+      fileSizeBytes: buf.length,
+      storageKey,
+      checksumSha256,
+    };
+  }
+
+  async uploadLiveCameraEvidence(claimId: string, dto: CaptureEvidenceDto, userId: string) {
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!claim) throw new NotFoundException(`Claim ${claimId} not found.`);
+
+    const evidenceId = crypto.randomUUID();
+    const stored = this.parseAndStoreImageBuffer(claimId, evidenceId, dto.imageBase64);
+    const serverNow = new Date();
+
+    const record = await this.prisma.claimEvidence.create({
+      data: {
+        id: evidenceId,
+        claimId,
+        fileUrl: `/api/v1/claims/${claimId}/evidence/${evidenceId}/file`,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        fileSizeBytes: stored.fileSizeBytes,
+        storageKey: stored.storageKey,
+        checksumSha256: stored.checksumSha256,
+        captureStep: dto.captureStep,
+        captureSource: 'LIVE_CAMERA',
+        uploadedById: userId,
+        serverUploadedAt: serverNow,
+        deviceLatitude: dto.deviceLatitude ?? claim.incidentLatitude,
+        deviceLongitude: dto.deviceLongitude ?? claim.incidentLongitude,
+        deviceTimestamp: serverNow,
+      },
+    });
+
+    await this.prisma.claimAuditLog.create({
+      data: {
+        claimId,
+        userId,
+        action: 'LIVE_CAMERA_EVIDENCE_UPLOAD',
+        fieldName: `evidence.${dto.captureStep}`,
+        newValue: `${stored.fileName} (sha256:${stored.checksumSha256.slice(0, 12)})`,
+      },
+    });
+
+    return record;
+  }
+
+  async uploadStaffExceptionEvidence(
+    claimId: string,
+    dto: StaffExceptionEvidenceDto,
+    userId: string,
+  ) {
+    if (!dto.exceptionReason || dto.exceptionReason.trim().length < 5) {
+      throw new BadRequestException(
+        'Staff exception uploads require a documented reason of at least 5 characters.',
+      );
+    }
+
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!claim) throw new NotFoundException(`Claim ${claimId} not found.`);
+
+    const evidenceId = crypto.randomUUID();
+    const stored = this.parseAndStoreImageBuffer(claimId, evidenceId, dto.imageBase64);
+    const serverNow = new Date();
+
+    const record = await this.prisma.claimEvidence.create({
+      data: {
+        id: evidenceId,
+        claimId,
+        fileUrl: `/api/v1/claims/${claimId}/evidence/${evidenceId}/file`,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        fileSizeBytes: stored.fileSizeBytes,
+        storageKey: stored.storageKey,
+        checksumSha256: stored.checksumSha256,
+        captureStep: dto.captureStep,
+        captureSource: 'STAFF_EXCEPTION',
+        exceptionReason: dto.exceptionReason.trim(),
+        uploadedById: userId,
+        serverUploadedAt: serverNow,
+        deviceLatitude: dto.deviceLatitude ?? claim.incidentLatitude,
+        deviceLongitude: dto.deviceLongitude ?? claim.incidentLongitude,
+        deviceTimestamp: serverNow,
+      },
+    });
+
+    await this.prisma.claimAuditLog.create({
+      data: {
+        claimId,
+        userId,
+        action: 'STAFF_EVIDENCE_EXCEPTION_UPLOAD',
+        fieldName: `evidence.${dto.captureStep}`,
+        newValue: `Reason: ${dto.exceptionReason.trim()} (sha256:${stored.checksumSha256.slice(0, 12)})`,
+      },
+    });
+
+    return record;
+  }
+
+  async getEvidenceFile(claimId: string, evidenceId: string) {
+    const evidence = await this.prisma.claimEvidence.findFirst({
+      where: { id: evidenceId, claimId },
+    });
+    if (!evidence || !evidence.storageKey) {
+      throw new NotFoundException(`Evidence file ${evidenceId} not found for claim ${claimId}.`);
+    }
+
+    const fullPath = path.resolve(this.evidenceRootDir, evidence.storageKey);
+    if (!fullPath.startsWith(this.evidenceRootDir) || !fs.existsSync(fullPath)) {
+      throw new NotFoundException('Stored evidence binary not found on server.');
+    }
+
+    return {
+      buffer: fs.readFileSync(fullPath),
+      mimeType: evidence.mimeType || 'image/jpeg',
+      fileName: evidence.fileName || `${evidenceId}.jpg`,
+    };
   }
 }

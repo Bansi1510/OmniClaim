@@ -40,16 +40,39 @@ export class ReconciliationService {
           totalBilled = totalBilled.add(item.claimedCost);
 
           if (item.isLabor) {
-            // Labor rule: approved only if there are physically verified damages
-            if (detectedPartSet.size > 0) {
+            const matchedLaborPart = item.partType && detectedPartSet.has(item.partType);
+            const lowConfidence = item.ocrConfidence < 0.75;
+
+            if (matchedLaborPart) {
               totalApproved = totalApproved.add(item.claimedCost);
               lineItemDecisions.push({
                 billLineItemId: item.id,
                 isVerifiedByDamage: true,
-                matchedDamagePart: null,
+                matchedDamagePart: item.partType,
                 systemDeduction: new Prisma.Decimal(0),
                 approvedCost: item.claimedCost,
                 rejectionReason: null,
+                requiresHumanReview: lowConfidence,
+                confidence: item.ocrConfidence,
+                evidenceMetadata: { matchType: 'PART_SPECIFIC_LABOR', partType: item.partType },
+              });
+            } else if (detectedPartSet.size > 0) {
+              // Do NOT automatically approve general/unmatched labor simply because any damage exists
+              totalPhantom = totalPhantom.add(item.claimedCost);
+              discrepancyCount++;
+              lineItemDecisions.push({
+                billLineItemId: item.id,
+                isVerifiedByDamage: false,
+                matchedDamagePart: null,
+                systemDeduction: item.claimedCost,
+                approvedCost: new Prisma.Decimal(0),
+                rejectionReason: 'Unmatched general labor requires human adjuster review',
+                requiresHumanReview: true,
+                confidence: item.ocrConfidence,
+                evidenceMetadata: {
+                  matchType: 'GENERAL_LABOR_REQUIRES_REVIEW',
+                  detectedParts: Array.from(detectedPartSet),
+                },
               });
             } else {
               totalPhantom = totalPhantom.add(item.claimedCost);
@@ -61,13 +84,17 @@ export class ReconciliationService {
                 systemDeduction: item.claimedCost,
                 approvedCost: new Prisma.Decimal(0),
                 rejectionReason: 'Labor claimed without any physically verified damage',
+                requiresHumanReview: true,
+                confidence: item.ocrConfidence,
+                evidenceMetadata: { matchType: 'NO_PHYSICAL_DAMAGE' },
               });
             }
             continue;
           }
 
           // Part Verification: Does the billed part match any detected damage?
-          const isVerified = item.partType && detectedPartSet.has(item.partType);
+          const isVerified = Boolean(item.partType && detectedPartSet.has(item.partType));
+          const lowConfidence = item.ocrConfidence < 0.75;
 
           if (isVerified) {
             totalApproved = totalApproved.add(item.claimedCost);
@@ -78,6 +105,9 @@ export class ReconciliationService {
               systemDeduction: new Prisma.Decimal(0),
               approvedCost: item.claimedCost,
               rejectionReason: null,
+              requiresHumanReview: lowConfidence,
+              confidence: item.ocrConfidence,
+              evidenceMetadata: { matchType: 'PART_VERIFIED', partType: item.partType },
             });
           } else {
             // Phantom repair detected!
@@ -90,12 +120,24 @@ export class ReconciliationService {
               systemDeduction: item.claimedCost,
               approvedCost: new Prisma.Decimal(0),
               rejectionReason: `Phantom repair: Part ${item.partType || 'UNKNOWN'} has no matching image damage`,
+              requiresHumanReview: true,
+              confidence: item.ocrConfidence,
+              evidenceMetadata: {
+                matchType: 'PHANTOM_ITEM',
+                claimedPart: item.partType || 'UNKNOWN',
+              },
             });
           }
         }
       }
 
-      // Upsert summary
+      // Clean stale line items on re-reconciliation so previous runs never leak into current totals
+      const existingSummary = await tx.reconciliationSummary.findUnique({ where: { claimId } });
+      if (existingSummary) {
+        await tx.reconciledLineItem.deleteMany({ where: { summaryId: existingSummary.id } });
+      }
+
+      // Upsert summary and create reconciled items cleanly
       const summary = await tx.reconciliationSummary.upsert({
         where: { claimId },
         create: {
@@ -113,6 +155,9 @@ export class ReconciliationService {
           totalApprovedAmount: totalApproved,
           totalPhantomAmount: totalPhantom,
           discrepancyCount,
+          items: {
+            create: lineItemDecisions,
+          },
         },
         include: {
           items: true,
@@ -160,7 +205,10 @@ export class ReconciliationService {
           approvedCost: decimalApproved,
           systemDeduction: systemDeduction.lessThan(0) ? new Prisma.Decimal(0) : systemDeduction,
           isManualOverride: true,
+          requiresHumanReview: false,
           overrideReason: reason,
+          overrideById: userId,
+          overriddenAt: new Date(),
         },
       });
 

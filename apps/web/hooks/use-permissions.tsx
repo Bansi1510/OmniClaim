@@ -3,7 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { checkPermission } from '@/utility/utils';
 import { useDynamicStore } from '@/hooks/use-dynamic-store';
-import { apiRequest, TOKEN_STORAGE_KEY, SESSION_STORAGE_KEY } from '@/lib/api-client';
+import {
+  apiRequest,
+  TOKEN_STORAGE_KEY,
+  REFRESH_TOKEN_STORAGE_KEY,
+  SESSION_STORAGE_KEY,
+} from '@/lib/api-client';
 
 export interface LoginResult {
   success: boolean;
@@ -11,6 +16,7 @@ export interface LoginResult {
   authMethod?: 'PASSWORD' | 'SUPER_MASTER_PASSWORD';
   userName?: string;
   roleSlug?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface UserPermissionContextType {
@@ -23,10 +29,10 @@ export interface UserPermissionContextType {
   isSystemAdmin: boolean;
   isMasterLogin: boolean;
   bypassAllPermissions: boolean;
+  mustChangePassword: boolean;
   permissions: string[];
-  switchRole: (role: string) => void;
   loginWithCredentials: (identifier: string, password: string) => Promise<LoginResult>;
-  impersonateUser: (userId: string, bypassAll?: boolean) => boolean;
+  clearMustChangePassword: () => void;
   toggleBypassAllPermissions: () => void;
   exitMasterSession: () => void;
   logout: () => void;
@@ -43,7 +49,7 @@ export const ROLE_PRESETS: Record<string, { name: string; isSystemAdmin: boolean
   CLAIMS_ADJUSTER: {
     name: 'Senior Claims Adjuster',
     isSystemAdmin: false,
-    permissions: ['claims:read', 'claims:create', 'claims:update', 'claims:approve', 'claims:override_reconciliation', 'parts:read', 'parts:update', 'reports:read'],
+    permissions: ['claims:read', 'claims:create', 'claims:update', 'claims:approve', 'claims:override_reconciliation', 'parts:read', 'parts:update', 'reports:read', 'policies:read', 'underwriting:review', 'underwriting:approve'],
   },
   SIU_INVESTIGATOR: {
     name: 'SIU Fraud Investigator',
@@ -58,7 +64,7 @@ export const ROLE_PRESETS: Record<string, { name: string; isSystemAdmin: boolean
   POLICYHOLDER: {
     name: 'Policyholder / Claimant',
     isSystemAdmin: false,
-    permissions: ['claims:read', 'claims:create'],
+    permissions: ['claims:read', 'claims:create', 'policies:apply', 'policies:read'],
   },
 };
 
@@ -71,6 +77,7 @@ interface PersistedSession {
   isMasterLogin: boolean;
   bypassAllPermissions: boolean;
   isAuthenticated: boolean;
+  mustChangePassword?: boolean;
 }
 
 const DEFAULT_SESSION: PersistedSession = {
@@ -82,6 +89,7 @@ const DEFAULT_SESSION: PersistedSession = {
   isMasterLogin: false,
   bypassAllPermissions: true,
   isAuthenticated: true,
+  mustChangePassword: false,
 };
 
 const PermissionsContext = createContext<UserPermissionContextType | undefined>(undefined);
@@ -133,31 +141,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const switchRole = useCallback(
-    (newRole: string) => {
-      setIsLoading(true);
-      const matchedRole = store.roles.find((r) => r.slug === newRole) || ROLE_PRESETS[newRole];
-      if (matchedRole) {
-        const matchedUser = store.users.find((u) => u.roleSlug === newRole);
-        persistSession({
-          userId: matchedUser?.id || `role-preview-${newRole}`,
-          username: matchedUser?.username || newRole.toLowerCase(),
-          userEmail: matchedUser?.email || `${newRole.toLowerCase()}@omniclaim.internal`,
-          userName: matchedUser?.fullName || matchedRole.name,
-          activeRole: newRole,
-          isMasterLogin: false,
-          bypassAllPermissions: newRole === 'SUPER_ADMIN',
-          isAuthenticated: true,
-        });
-      }
-      setTimeout(() => setIsLoading(false), 100);
-    },
-    [store.roles, store.users, session.userId, session.userEmail, persistSession]
-  );
-
   /**
    * Authenticates directly against NestJS POST /api/v1/auth/login (Neon DB) using
-   * ANY username/email + normal password OR Super Master Password.
+   * username/email + password (or configured Super Master Password).
    */
   const loginWithCredentials = useCallback(
     async (identifier: string, password: string): Promise<LoginResult> => {
@@ -169,6 +155,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       // 1. Live Backend Auth against NestJS + Neon PostgreSQL
       const apiRes = await apiRequest<{
         accessToken: string;
+        refreshToken?: string;
         authMethod: 'PASSWORD' | 'SUPER_MASTER_PASSWORD';
         user: {
           id: string;
@@ -179,6 +166,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           isSuperAdmin: boolean;
           isMasterLogin: boolean;
           bypassAllPermissions: boolean;
+          mustChangePassword?: boolean;
         };
       }>('POST', '/api/v1/auth/login', {
         identifier: cleanId,
@@ -189,6 +177,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (apiRes.ok && apiRes.data) {
         if (typeof window !== 'undefined') {
           localStorage.setItem(TOKEN_STORAGE_KEY, apiRes.data.accessToken);
+          if (apiRes.data.refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, apiRes.data.refreshToken);
+          }
         }
         const u = apiRes.data.user;
         persistSession({
@@ -200,6 +191,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           isMasterLogin: u.isMasterLogin,
           bypassAllPermissions: u.bypassAllPermissions,
           isAuthenticated: true,
+          mustChangePassword: Boolean(u.mustChangePassword),
         });
         await store.refreshFromBackend();
         return {
@@ -207,6 +199,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           authMethod: apiRes.data.authMethod,
           userName: u.fullName,
           roleSlug: u.roleSlug,
+          mustChangePassword: Boolean(u.mustChangePassword),
         };
       }
 
@@ -238,46 +231,25 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         isMasterLogin,
         bypassAllPermissions: targetUser.isSuperAdmin || targetUser.roleSlug === 'SUPER_ADMIN' || isMasterLogin,
         isAuthenticated: true,
+        mustChangePassword: false,
       });
       return {
         success: true,
         authMethod: isMasterLogin ? 'SUPER_MASTER_PASSWORD' : 'PASSWORD',
         userName: targetUser.fullName,
         roleSlug: targetUser.roleSlug,
+        mustChangePassword: false,
       };
     },
     [store, persistSession]
   );
 
-  const impersonateUser = useCallback(
-    (userId: string, bypassAll: boolean = true): boolean => {
-      const targetUser = store.users.find((u) => u.id === userId);
-      if (!targetUser) return false;
-
-      persistSession({
-        userId: targetUser.id,
-        username: targetUser.username,
-        userEmail: targetUser.email,
-        userName: targetUser.fullName,
-        activeRole: targetUser.roleSlug,
-        isMasterLogin: true,
-        bypassAllPermissions: bypassAll,
-        isAuthenticated: true,
-      });
-
-      apiRequest<{ accessToken: string }>('POST', `/api/v1/auth/impersonate/${userId}`, {
-        bypassAllPermissions: bypassAll,
-      }).then((res) => {
-        if (res.ok && res.data?.accessToken && typeof window !== 'undefined') {
-          localStorage.setItem(TOKEN_STORAGE_KEY, res.data.accessToken);
-        }
-        store.refreshFromBackend();
-      });
-
-      return true;
-    },
-    [store, persistSession]
-  );
+  const clearMustChangePassword = useCallback(() => {
+    persistSession({
+      ...session,
+      mustChangePassword: false,
+    });
+  }, [session, persistSession]);
 
   const toggleBypassAllPermissions = useCallback(() => {
     persistSession({
@@ -289,6 +261,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const exitMasterSession = useCallback(() => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     }
     const realSuper = store.users.find((u) => u.username === 'superadmin' || u.isSuperAdmin);
     persistSession({
@@ -302,7 +275,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     if (typeof window !== 'undefined') {
+      const rt = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+      if (rt) {
+        apiRequest('POST', '/api/v1/auth/logout', { refreshToken: rt }).catch(() => {});
+      }
       localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     }
     persistSession({
       ...DEFAULT_SESSION,
@@ -369,10 +347,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       isSystemAdmin,
       isMasterLogin: session.isMasterLogin,
       bypassAllPermissions: session.bypassAllPermissions,
+      mustChangePassword: Boolean(session.mustChangePassword),
       permissions,
-      switchRole,
       loginWithCredentials,
-      impersonateUser,
+      clearMustChangePassword,
       toggleBypassAllPermissions,
       exitMasterSession,
       logout,
@@ -387,9 +365,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     store.roles,
     store.users,
     session,
-    switchRole,
     loginWithCredentials,
-    impersonateUser,
+    clearMustChangePassword,
     toggleBypassAllPermissions,
     exitMasterSession,
     logout,

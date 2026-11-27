@@ -170,20 +170,23 @@ interface DynamicStoreState {
 const STORAGE_KEY = 'omniclaim_dynamic_enterprise_store_v2';
 
 const FALLBACK_MENUS: DynamicMenuItemDto[] = [
-  { id: 'm-1', menuKey: 'claims-ops', label: 'Claims Operations', icon: 'FileText', parentKey: null, requiredPermission: 'claims:read', sortOrder: 1, isVisible: true, isSystem: true },
+  { id: 'm-p1', menuKey: 'apply_policy', label: 'Apply for Policy', navLink: '/policies/apply', icon: 'FilePlus', parentKey: null, requiredPermission: 'policies:apply', badgeName: 'New', badgeColor: 'bg-emerald-500/20 text-emerald-400', sortOrder: 1, isVisible: true, isSystem: false },
+  { id: 'm-p2', menuKey: 'my_policies', label: 'Policies Portfolio', navLink: '/policies', icon: 'ShieldCheck', parentKey: null, requiredPermission: 'policies:read', sortOrder: 2, isVisible: true, isSystem: false },
+  { id: 'm-p3', menuKey: 'underwriting_queue', label: 'Underwriting Queue', navLink: '/underwriting', icon: 'ClipboardCheck', parentKey: null, requiredPermission: 'underwriting:review', sortOrder: 3, isVisible: true, isSystem: false },
+  { id: 'm-1', menuKey: 'claims-ops', label: 'Claims Operations', icon: 'FileText', parentKey: null, requiredPermission: 'claims:read', sortOrder: 4, isVisible: true, isSystem: true },
   { id: 'm-1a', menuKey: 'triage-queue', label: 'Triage Queue', navLink: '/claims', icon: 'Circle', parentKey: 'claims-ops', requiredPermission: 'claims:read', sortOrder: 1, isVisible: true },
   { id: 'm-1b', menuKey: 'initiate-claim', label: 'Submit New Claim', navLink: '/claims?action=new', icon: 'Circle', parentKey: 'claims-ops', requiredPermission: 'claims:create', badgeName: 'Intake', badgeColor: 'bg-primary/20 text-primary', sortOrder: 2, isVisible: true },
-  { id: 'm-2', menuKey: 'fraud-siu', label: 'Fraud & SIU Unit', icon: 'ShieldAlert', parentKey: null, requiredPermission: 'fraud:read', sortOrder: 2, isVisible: true, isSystem: true },
+  { id: 'm-2', menuKey: 'fraud-siu', label: 'Fraud & SIU Unit', icon: 'ShieldAlert', parentKey: null, requiredPermission: 'fraud:read', sortOrder: 5, isVisible: true, isSystem: true },
   { id: 'm-2a', menuKey: 'fraud-scorecards', label: 'Scorecard Audits', navLink: '/claims', icon: 'Circle', parentKey: 'fraud-siu', requiredPermission: 'fraud:read', sortOrder: 1, isVisible: true },
   { id: 'm-2b', menuKey: 'pgvector-search', label: 'pgvector Similarity', navLink: '/claims/clm-003', icon: 'Circle', parentKey: 'fraud-siu', requiredPermission: 'fraud:read', badgeName: 'Vector', badgeColor: 'bg-teal-500/20 text-teal-400', sortOrder: 2, isVisible: true },
-  { id: 'm-3', menuKey: 'ledger-accounting', label: 'Financial Ledger', icon: 'BookOpen', parentKey: null, requiredPermission: 'ledger:read', sortOrder: 3, isVisible: true, isSystem: true },
+  { id: 'm-3', menuKey: 'ledger-accounting', label: 'Financial Ledger', icon: 'BookOpen', parentKey: null, requiredPermission: 'ledger:read', sortOrder: 6, isVisible: true, isSystem: true },
   { id: 'm-3a', menuKey: 'general-journals', label: 'General Journals', navLink: '/ledger', icon: 'Circle', parentKey: 'ledger-accounting', requiredPermission: 'ledger:read', sortOrder: 1, isVisible: true },
   { id: 'm-3b', menuKey: 'payout-vouchers', label: 'Chart of Accounts', navLink: '/ledger?tab=accounts', icon: 'Circle', parentKey: 'ledger-accounting', requiredPermission: 'ledger:read', sortOrder: 2, isVisible: true },
-  { id: 'm-4', menuKey: 'setup-rbac', label: 'Setup & Access Control', icon: 'Settings', parentKey: null, requiredPermission: 'rbac:roles_create', sortOrder: 4, isVisible: true, isSystem: true },
+  { id: 'm-4', menuKey: 'setup-rbac', label: 'Setup & Access Control', icon: 'Settings', parentKey: null, requiredPermission: 'rbac:roles_create', sortOrder: 7, isVisible: true, isSystem: true },
   { id: 'm-4a', menuKey: 'roles-rights', label: 'Roles & Rights Setup', navLink: '/admin/roles', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:roles_create', sortOrder: 1, isVisible: true },
   { id: 'm-4b', menuKey: 'permission-matrix', label: 'Permission Matrix Grid', navLink: '/admin/rbac', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:roles_create', sortOrder: 2, isVisible: true },
   { id: 'm-4c', menuKey: 'user-access', label: 'User Role Assignment', navLink: '/admin/users', icon: 'Circle', parentKey: 'setup-rbac', requiredPermission: 'rbac:users_assign', sortOrder: 3, isVisible: true },
-  { id: 'm-5', menuKey: 'audit-compliance', label: 'Audit & Compliance', icon: 'History', parentKey: null, requiredPermission: 'audit:read', sortOrder: 5, isVisible: true, isSystem: true },
+  { id: 'm-5', menuKey: 'audit-compliance', label: 'Audit & Compliance', icon: 'History', parentKey: null, requiredPermission: 'audit:read', sortOrder: 8, isVisible: true, isSystem: true },
   { id: 'm-5a', menuKey: 'field-audit', label: 'Field & Security Logs', navLink: '/audit', icon: 'Circle', parentKey: 'audit-compliance', requiredPermission: 'audit:read', sortOrder: 1, isVisible: true },
 ];
 
@@ -488,7 +491,7 @@ export function DynamicStoreProvider({ children }: { children: ReactNode }) {
           username: u.username,
           email: u.email,
           fullName: u.fullName,
-          password: u.password || 'AdminOmniClaim2026!',
+          password: u.password || 'OmniClaim@123',
           roleSlug: u.roleSlug,
           isActive: u.isActive,
           isSuperAdmin: u.isSuperAdmin,

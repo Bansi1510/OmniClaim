@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -6,12 +7,15 @@ import { GlobalHttpExceptionFilter } from './common/filters/global-exception.fil
 
 async function bootstrap() {
   const logger = new Logger('OmniClaimAPI');
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: {
       origin: true,
       credentials: true,
     },
   });
+
+  app.useBodyParser('json', { limit: '15mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '15mb' });
 
   // Global exception filter for RFC 7807 Problem Details
   app.useGlobalFilters(new GlobalHttpExceptionFilter());

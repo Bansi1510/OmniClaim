@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ClaimStatus } from '@omniclaim/database';
+import { ClaimStatus, Prisma } from '@omniclaim/database';
 
 @Injectable()
 export class ClaimFsmService {
@@ -26,9 +26,30 @@ export class ClaimFsmService {
       ClaimStatus.REJECTED,
     ],
     [ClaimStatus.MANUAL_REVIEW]: [ClaimStatus.APPROVED, ClaimStatus.REJECTED],
-    [ClaimStatus.APPROVED]: [ClaimStatus.SETTLED],
-    [ClaimStatus.SETTLED]: [], // Terminal state
-    [ClaimStatus.REJECTED]: [], // Terminal state
+    [ClaimStatus.APPROVED]: [
+      ClaimStatus.PAYMENT_PENDING,
+      ClaimStatus.SETTLED,
+      ClaimStatus.DISPUTED,
+    ],
+    [ClaimStatus.PAYMENT_PENDING]: [
+      ClaimStatus.SETTLED,
+      ClaimStatus.PAYMENT_FAILED,
+    ],
+    [ClaimStatus.PAYMENT_FAILED]: [
+      ClaimStatus.PAYMENT_PENDING,
+      ClaimStatus.MANUAL_REVIEW,
+    ],
+    [ClaimStatus.SETTLED]: [ClaimStatus.REOPENED, ClaimStatus.DISPUTED],
+    [ClaimStatus.REJECTED]: [ClaimStatus.REOPENED, ClaimStatus.DISPUTED],
+    [ClaimStatus.DISPUTED]: [
+      ClaimStatus.MANUAL_REVIEW,
+      ClaimStatus.APPROVED,
+      ClaimStatus.REJECTED,
+    ],
+    [ClaimStatus.REOPENED]: [
+      ClaimStatus.MANUAL_REVIEW,
+      ClaimStatus.TRIAGE_PENDING,
+    ],
   };
 
   constructor(private readonly prisma: PrismaService) {}
@@ -50,10 +71,11 @@ export class ClaimFsmService {
     expectedVersion: number;
     userId: string;
     reason: string;
+    tx?: Prisma.TransactionClient;
   }) {
-    const { claimId, targetStatus, expectedVersion, userId, reason } = params;
+    const { claimId, targetStatus, expectedVersion, userId, reason, tx: outerTx } = params;
 
-    return await this.prisma.$transaction(async (tx) => {
+    const run = async (tx: Prisma.TransactionClient) => {
       // 1. Fetch current status & version
       const claim = await tx.claim.findUnique({
         where: { id: claimId },
@@ -116,6 +138,8 @@ export class ClaimFsmService {
         newVersion: expectedVersion + 1,
         transitionLogId: log.id,
       };
-    });
+    };
+
+    return outerTx ? run(outerTx) : await this.prisma.$transaction(run);
   }
 }

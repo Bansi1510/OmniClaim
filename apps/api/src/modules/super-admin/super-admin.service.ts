@@ -43,7 +43,26 @@ export class SuperAdminService {
     private readonly authService: AuthService,
   ) {}
 
-  async getBootstrapSnapshot() {
+  async getBootstrapSnapshot(actor?: {
+    id: string;
+    permissions?: string[];
+    roles?: string[];
+    isSuperAdmin?: boolean;
+    isMasterLogin?: boolean;
+    bypassAllPermissions?: boolean;
+  }) {
+    const hasAdminOrOps =
+      !actor ||
+      actor.isSuperAdmin ||
+      actor.isMasterLogin ||
+      actor.bypassAllPermissions ||
+      actor.roles?.includes('SUPER_ADMIN') ||
+      actor.permissions?.includes('*') ||
+      ['claims:update', 'claims:approve', 'claims:settle', 'fraud:read', 'ledger:read', 'audit:read', 'superadmin:access'].some(
+        (p) => actor.permissions?.includes(p),
+      );
+    const restrictedUserId = !hasAdminOrOps ? actor.id : undefined;
+
     const [
       users,
       roles,
@@ -62,10 +81,13 @@ export class SuperAdminService {
       locks,
       securityLogs,
     ] = await Promise.all([
-      this.prisma.user.findMany({ include: { roles: { include: { role: true } } }, orderBy: { createdAt: 'desc' } }),
+      restrictedUserId
+        ? Promise.resolve([])
+        : this.prisma.user.findMany({ include: { roles: { include: { role: true } } }, orderBy: { createdAt: 'desc' } }),
       this.prisma.role.findMany({ include: { permissions: { include: { permission: true } } }, orderBy: { createdAt: 'asc' } }),
       this.prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { slug: 'asc' }] }),
       this.prisma.claim.findMany({
+        where: restrictedUserId ? { policy: { policyHolderId: restrictedUserId } } : undefined,
         include: {
           policy: true,
           adjuster: { select: { fullName: true } },
@@ -76,19 +98,27 @@ export class SuperAdminService {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.policy.findMany({ orderBy: { createdAt: 'desc' } }),
+      this.prisma.policy.findMany({
+        where: restrictedUserId ? { policyHolderId: restrictedUserId } : undefined,
+        orderBy: { createdAt: 'desc' },
+      }),
       this.prisma.vehiclePartCatalog.findMany({ orderBy: { partCode: 'asc' } }),
       this.prisma.depreciationRule.findMany({ orderBy: { priority: 'asc' } }),
       this.prisma.automationRule.findMany({ orderBy: [{ ruleType: 'asc' }, { name: 'asc' }] }),
       this.prisma.repairGarage.findMany({ orderBy: { name: 'asc' } }),
       this.prisma.dynamicMenuItem.findMany({ orderBy: { sortOrder: 'asc' } }),
       this.prisma.systemSetting.findMany({ orderBy: [{ category: 'asc' }, { key: 'asc' }] }),
-      this.prisma.ledgerAccount.findMany({ orderBy: { accountNumber: 'asc' } }),
-      this.prisma.ledgerJournalEntry.findMany({
-        include: { claim: { select: { claimNumber: true } }, lines: { include: { account: true } } },
-        orderBy: { createdAt: 'desc' },
-      }),
+      restrictedUserId
+        ? Promise.resolve([])
+        : this.prisma.ledgerAccount.findMany({ orderBy: { accountNumber: 'asc' } }),
+      restrictedUserId
+        ? Promise.resolve([])
+        : this.prisma.ledgerJournalEntry.findMany({
+            include: { claim: { select: { claimNumber: true } }, lines: { include: { account: true } } },
+            orderBy: { createdAt: 'desc' },
+          }),
       this.prisma.claimAuditLog.findMany({
+        where: restrictedUserId ? { claim: { policy: { policyHolderId: restrictedUserId } } } : undefined,
         include: {
           claim: { select: { claimNumber: true } },
           user: { select: { fullName: true, email: true } },
@@ -96,13 +126,17 @@ export class SuperAdminService {
         orderBy: { timestamp: 'desc' },
         take: 50,
       }),
-      this.prisma.claimLock.findMany({
-        include: {
-          claim: { select: { claimNumber: true } },
-          user: { select: { fullName: true, email: true } },
-        },
-      }),
-      this.prisma.securityAuditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+      restrictedUserId
+        ? Promise.resolve([])
+        : this.prisma.claimLock.findMany({
+            include: {
+              claim: { select: { claimNumber: true } },
+              user: { select: { fullName: true, email: true } },
+            },
+          }),
+      restrictedUserId
+        ? Promise.resolve([])
+        : this.prisma.securityAuditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
     ]);
 
     const userMap = new Map(users.map((u) => [u.id, u.fullName]));
@@ -662,8 +696,40 @@ export class SuperAdminService {
   // =========================================================================
   // 9. DYNAMIC USERS FULL CRUD
   // =========================================================================
+  private async generateUniqueUsername(dto: CreateUserDto): Promise<string> {
+    const rolePrefix = (dto.roleSlug || 'user')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 10);
+    const nameSlug = dto.fullName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '.')
+      .replace(/^\.+|\.+$/g, '')
+      .slice(0, 20);
+
+    const requested = dto.username?.toLowerCase().trim().replace(/[^a-z0-9._-]+/g, '');
+    const base = requested || `${rolePrefix || 'user'}.${nameSlug || 'member'}`;
+
+    let candidate = base;
+    for (let attempt = 0; attempt < 25; attempt++) {
+      const existing = await this.prisma.user.findUnique({ where: { username: candidate } });
+      if (!existing) {
+        return candidate;
+      }
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      candidate = `${base}.${suffix}`;
+    }
+    return `${base}.${Date.now().toString(36)}`;
+  }
+
   async createUser(dto: CreateUserDto) {
-    const passwordHash = this.authService.hashUserPassword(dto.password);
+    const initialPassword =
+      dto.password?.trim() || process.env.DEFAULT_USER_PASSWORD || 'OmniClaim@123';
+    const passwordHash = this.authService.hashUserPassword(initialPassword);
+    const uniqueUsername = await this.generateUniqueUsername(dto);
+
     let resolvedRoleIds = dto.roleIds || [];
     if (resolvedRoleIds.length === 0 && dto.roleSlug) {
       const role = await this.prisma.role.findUnique({ where: { slug: dto.roleSlug } });
@@ -672,10 +738,11 @@ export class SuperAdminService {
 
     const user = await this.prisma.user.create({
       data: {
-        username: dto.username.toLowerCase().trim(),
+        username: uniqueUsername,
         email: dto.email.toLowerCase().trim(),
-        fullName: dto.fullName,
+        fullName: dto.fullName.trim(),
         passwordHash,
+        mustChangePassword: true,
         isActive: dto.isActive ?? true,
         isSuperAdmin: dto.isSuperAdmin ?? (dto.roleSlug === 'SUPER_ADMIN'),
         ...(resolvedRoleIds.length > 0
@@ -688,7 +755,10 @@ export class SuperAdminService {
       },
       include: { roles: { include: { role: true } } },
     });
-    return user;
+    return {
+      ...user,
+      temporaryPassword: initialPassword,
+    };
   }
 
   async updateUser(id: string, dto: UpdateUserDto) {

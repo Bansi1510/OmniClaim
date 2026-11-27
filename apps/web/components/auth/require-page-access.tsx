@@ -86,7 +86,7 @@ export function RequirePageAccess({
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition"
         >
           <LogIn className="h-3.5 w-3.5" />
-          <span>Switch Account / Login</span>
+          <span>Sign In Again</span>
         </Link>
       </div>
     </div>

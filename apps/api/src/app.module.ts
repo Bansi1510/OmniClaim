@@ -15,6 +15,7 @@ import { FraudEngineModule } from './modules/fraud/fraud.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { StpModule } from './modules/stp/stp.module';
 import { WebhookModule } from './modules/webhooks/webhook.module';
+import { PolicyApplicationsModule } from './modules/policy-applications/policy-applications.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { WebhookModule } from './modules/webhooks/webhook.module';
     StpModule,
     ClaimsModule,
     WebhookModule,
+    PolicyApplicationsModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { DamageCanvas } from '@/components/claims/damage-canvas';
+import { LiveCameraCapture } from '@/components/claims/live-camera-capture';
 import { CarWireframe } from '@/components/claims/car-wireframe';
 import { ReconciliationTable } from '@/components/claims/reconciliation-table';
 import { ActuarialWaterfall } from '@/components/claims/actuarial-waterfall';
@@ -468,6 +469,10 @@ export default function AdjusterWorkspacePage({ params }: { params: Promise<{ id
         {/* Tab Panels */}
         {activeTab === 'evidence' && (
           <div className="space-y-4">
+            <LiveCameraCapture
+              claimId={claim.id}
+              onUploaded={() => notify('Live camera photo uploaded & verified with SHA-256 checksum.')}
+            />
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="space-y-4 lg:col-span-2">
                 <DamageCanvas

@@ -236,10 +236,10 @@ export class UpdatePermissionDto {
 }
 
 export class CreateUserDto {
-  @IsString() @IsNotEmpty() username: string;
+  @IsOptional() @IsString() username?: string;
   @IsString() @IsNotEmpty() email: string;
   @IsString() @IsNotEmpty() fullName: string;
-  @IsString() @IsNotEmpty() password: string;
+  @IsOptional() @IsString() password?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsBoolean() isSuperAdmin?: boolean;
   @IsOptional() @IsString() roleSlug?: string;
