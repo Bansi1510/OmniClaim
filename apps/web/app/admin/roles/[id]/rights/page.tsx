@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Breadcrumb } from '@/components/common/breadcrumb';
 import { useDynamicStore } from '@/hooks/use-dynamic-store';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Can } from '@/components/auth/can';
+import { RequirePageAccess } from '@/components/auth/require-page-access';
 import {
   Shield,
   ChevronDown,
@@ -21,6 +23,8 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
   const unwrappedParams = React.use(params);
   const searchParams = useSearchParams();
   const { roles, permissionsCatalog, updateRolePermissions } = useDynamicStore();
+  const { hasAnyPermission } = usePermissions();
+  const canEditRights = hasAnyPermission(['rbac:roles_assign', 'rbac:roles_update']);
 
   const targetRole = useMemo(
     () =>
@@ -63,6 +67,7 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
   };
 
   const handleToggleSingle = (slug: string) => {
+    if (!canEditRights) return;
     setIsDirty(true);
     setSelectedSlugs((prev) => {
       const next = new Set(prev);
@@ -73,6 +78,7 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
   };
 
   const handleToggleModuleAll = (perms: typeof permissionsCatalog) => {
+    if (!canEditRights) return;
     setIsDirty(true);
     const allSlugs = perms.map((p) => p.slug);
     const allSelected = allSlugs.every((s) => selectedSlugs.has(s));
@@ -96,7 +102,11 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
   };
 
   return (
-    <div className="pb-24">
+    <RequirePageAccess
+      permission={['rbac:roles_read', 'rbac:roles_assign', 'rbac:roles_update']}
+      title="Assign Role Rights"
+    >
+      <div className="pb-24">
       <Breadcrumb
         title={`Assign Rights: ${roleName}`}
         items={[{ label: 'Setup' }, { label: 'Role & Rights', href: '/admin/roles' }]}
@@ -142,11 +152,12 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
                     type="checkbox"
                     id={`select-all-${section.module}`}
                     checked={allSelected}
+                    disabled={!canEditRights}
                     ref={(el) => {
                       if (el) el.indeterminate = someSelected;
                     }}
                     onChange={() => handleToggleModuleAll(section.permissions)}
-                    className="h-4 w-4 rounded border-border text-primary cursor-pointer"
+                    className="h-4 w-4 rounded border-border text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <label htmlFor={`select-all-${section.module}`} className="font-bold text-sm text-foreground cursor-pointer hover:text-primary">
                     {section.module} MODULE ({section.permissions.length} Rights)
@@ -170,7 +181,9 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
                       <div
                         key={perm.slug}
                         onClick={() => handleToggleSingle(perm.slug)}
-                        className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition select-none ${
+                        className={`flex items-start gap-3 rounded-lg border p-3 transition select-none ${
+                          canEditRights ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'
+                        } ${
                           isChecked ? 'border-primary/40 bg-primary/5' : 'border-border/50 bg-background hover:bg-muted/30'
                         }`}
                       >
@@ -227,6 +240,7 @@ export default function RoleRightsAssignmentPage({ params }: { params: Promise<{
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </RequirePageAccess>
   );
 }

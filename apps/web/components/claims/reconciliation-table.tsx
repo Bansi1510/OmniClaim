@@ -2,8 +2,10 @@
 
 import React from 'react';
 import { ReconciledLineItemDto } from '@omniclaim/shared-types';
-import { Can } from '@/components/auth/can';
-import { Lock } from 'lucide-react';
+import { DataGrid, type GridColumn } from '@/components/common/data-grid';
+import type { GridAction } from '@/components/common/grid-action-menu';
+import { usePermissions } from '@/hooks/use-permissions';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 interface ReconciliationTableProps {
   items: ReconciledLineItemDto[];
@@ -20,113 +22,152 @@ export function ReconciliationTable({
   totalPhantom,
   onOverrideItem,
 }: ReconciliationTableProps) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-center justify-between pb-4 border-b border-border">
+  const { hasPermission } = usePermissions();
+  const canOverride = hasPermission('claims:override_reconciliation') && Boolean(onOverrideItem);
+
+  const columns: GridColumn<ReconciledLineItemDto>[] = [
+    {
+      id: 'rawDescription',
+      header: 'Billed Description',
+      minWidth: 220,
+      accessor: (i) => i.rawDescription,
+      summary: 'count',
+      cell: (item) => (
         <div>
-          <h3 className="font-semibold text-foreground text-base">Bill Reconciliation & Phantom Item Diff</h3>
-          <p className="text-xs text-muted-foreground">
-            Comparing garage invoice line items against AI-detected visual damage
-          </p>
+          <span className="font-medium text-foreground">{item.rawDescription}</span>
+          {item.isManualOverride && (
+            <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+              OVERRIDDEN
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-4 text-xs font-medium">
-          <div className="rounded-md bg-muted px-3 py-1">
+      ),
+    },
+    {
+      id: 'type',
+      header: 'Type',
+      filterOptions: [
+        { label: 'Part', value: 'Part' },
+        { label: 'Labor', value: 'Labor' },
+      ],
+      accessor: (i) => (i.isLabor ? 'Labor' : 'Part'),
+      cell: (item) => <span className="text-muted-foreground">{item.isLabor ? 'Labor' : 'Part'}</span>,
+    },
+    {
+      id: 'claimedCost',
+      header: 'Claimed',
+      align: 'right',
+      accessor: (i) => i.claimedCost,
+      summary: (rows) => (
+        <span className="font-mono">${rows.reduce((s, r) => s + r.claimedCost, 0).toFixed(2)}</span>
+      ),
+      cell: (item) => <span className="font-mono font-medium">${item.claimedCost.toFixed(2)}</span>,
+    },
+    {
+      id: 'matchedDamagePart',
+      header: 'AI Damage Match',
+      accessor: (i) => i.matchedDamagePart || 'None',
+      cell: (item) =>
+        item.matchedDamagePart ? (
+          <span className="rounded bg-primary/10 px-2 py-0.5 font-medium text-primary">
+            {item.matchedDamagePart}
+          </span>
+        ) : (
+          <span className="italic text-muted-foreground">None (No Damage Detected)</span>
+        ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      filterOptions: [
+        { label: 'Verified', value: 'Verified' },
+        { label: 'Phantom', value: 'Phantom' },
+      ],
+      accessor: (i) => (i.isVerifiedByDamage ? 'Verified' : 'Phantom'),
+      cell: (item) =>
+        item.isVerifiedByDamage ? (
+          <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-500">
+            ✔ Verified
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-rose-500">
+            ⚠ Phantom
+          </span>
+        ),
+    },
+    {
+      id: 'systemDeduction',
+      header: 'Deduction',
+      align: 'right',
+      accessor: (i) => i.systemDeduction,
+      summary: (rows) => (
+        <span className="font-mono text-rose-500">
+          -${rows.reduce((s, r) => s + r.systemDeduction, 0).toFixed(2)}
+        </span>
+      ),
+      cell: (item) => (
+        <span className="font-mono font-semibold text-rose-500">
+          {item.systemDeduction > 0 ? `-$${item.systemDeduction.toFixed(2)}` : '$0.00'}
+        </span>
+      ),
+    },
+    {
+      id: 'approvedCost',
+      header: 'Approved',
+      align: 'right',
+      accessor: (i) => i.approvedCost,
+      summary: (rows) => (
+        <span className="font-mono text-emerald-500">
+          ${rows.reduce((s, r) => s + r.approvedCost, 0).toFixed(2)}
+        </span>
+      ),
+      cell: (item) => (
+        <span className="font-mono font-bold text-emerald-500">${item.approvedCost.toFixed(2)}</span>
+      ),
+    },
+  ];
+
+  const rowActions = (item: ReconciledLineItemDto): GridAction[] =>
+    canOverride
+      ? [
+          {
+            key: item.isVerifiedByDamage ? 'reject' : 'approve',
+            label: item.isVerifiedByDamage ? 'Mark Phantom' : 'Approve Item',
+            icon: item.isVerifiedByDamage ? XCircle : CheckCircle2,
+            tone: item.isVerifiedByDamage ? 'danger' : 'success',
+            onClick: () => onOverrideItem!(item.id, !item.isVerifiedByDamage),
+          },
+        ]
+      : [];
+
+  return (
+    <DataGrid<ReconciledLineItemDto>
+      title="Bill Reconciliation & Phantom Item Diff"
+      subtitle="Comparing garage invoice line items against AI-detected visual damage"
+      data={items}
+      columns={columns}
+      rowKey={(i) => i.id}
+      actions={rowActions}
+      compact
+      pageSize={10}
+      exportFileName="claim-reconciliation"
+      rowClassName={(item) => (!item.isVerifiedByDamage ? 'bg-rose-500/5' : undefined)}
+      emptyMessage="No garage invoice line items on this claim."
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+          <div className="rounded-md bg-muted px-2.5 py-1">
             Billed: <span className="font-bold text-foreground">${totalBilled.toFixed(2)}</span>
           </div>
-          <div className="rounded-md bg-emerald-500/10 px-3 py-1 text-emerald-500 font-bold border border-emerald-500/20">
+          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-bold text-emerald-500">
             Approved: ${totalApproved.toFixed(2)}
           </div>
           {totalPhantom > 0 && (
-            <div className="rounded-md bg-rose-500/10 px-3 py-1 text-rose-500 font-bold border border-rose-500/20 animate-pulse">
-              Phantom Deduction: -${totalPhantom.toFixed(2)}
+            <div className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 font-bold text-rose-500">
+              Phantom: -${totalPhantom.toFixed(2)}
             </div>
           )}
         </div>
-      </div>
-
-      <div className="overflow-x-auto pt-3">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/60 text-xs font-semibold text-muted-foreground uppercase">
-              <th className="py-2.5 px-3">Billed Description</th>
-              <th className="py-2.5 px-3">Type</th>
-              <th className="py-2.5 px-3">Claimed</th>
-              <th className="py-2.5 px-3">AI Damage Match</th>
-              <th className="py-2.5 px-3">Status</th>
-              <th className="py-2.5 px-3">Deduction</th>
-              <th className="py-2.5 px-3">Approved</th>
-              <th className="py-2.5 px-3 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {items.map((item) => (
-              <tr
-                key={item.id}
-                className={`hover:bg-muted/30 transition ${
-                  !item.isVerifiedByDamage ? 'bg-rose-500/5' : ''
-                }`}
-              >
-                <td className="py-3 px-3 font-medium text-foreground">
-                  {item.rawDescription}
-                  {item.isManualOverride && (
-                    <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-500 font-semibold">
-                      OVERRIDDEN
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 px-3 text-xs text-muted-foreground">
-                  {item.isLabor ? 'Labor' : 'Part'}
-                </td>
-                <td className="py-3 px-3 font-mono font-medium">${item.claimedCost.toFixed(2)}</td>
-                <td className="py-3 px-3 text-xs">
-                  {item.matchedDamagePart ? (
-                    <span className="rounded bg-primary/10 px-2 py-0.5 font-medium text-primary">
-                      {item.matchedDamagePart}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground italic">None (No Damage Detected)</span>
-                  )}
-                </td>
-                <td className="py-3 px-3">
-                  {item.isVerifiedByDamage ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-500 border border-emerald-500/20">
-                      ✔ Verified
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-500 border border-rose-500/20">
-                      ⚠ Phantom
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 px-3 font-mono text-xs text-rose-500 font-semibold">
-                  {item.systemDeduction > 0 ? `-$${item.systemDeduction.toFixed(2)}` : '$0.00'}
-                </td>
-                <td className="py-3 px-3 font-mono text-xs text-emerald-500 font-bold">
-                  ${item.approvedCost.toFixed(2)}
-                </td>
-                <td className="py-3 px-3 text-right">
-                  <Can
-                    permission="claims:override_reconciliation"
-                    fallback={
-                      <span className="text-[11px] text-muted-foreground flex items-center justify-end gap-1" title="Permission required to override reconciliation">
-                        <Lock className="h-3 w-3" />
-                        <span className="italic">Read-only</span>
-                      </span>
-                    }
-                  >
-                    <button
-                      onClick={() => onOverrideItem?.(item.id, !item.isVerifiedByDamage)}
-                      className="rounded border border-border bg-secondary/80 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary transition"
-                    >
-                      {item.isVerifiedByDamage ? 'Mark Phantom' : 'Approve Item'}
-                    </button>
-                  </Can>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      }
+    />
   );
 }

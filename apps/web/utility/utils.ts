@@ -15,7 +15,7 @@ export const checkPermission = (
   }
 
   // Super Admin gets unrestricted access
-  if (userPermissions.includes('SUPER_ADMIN')) {
+  if (userPermissions.includes('SUPER_ADMIN') || userPermissions.includes('*')) {
     return true;
   }
 

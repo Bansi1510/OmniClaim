@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   email: string;
   fullName?: string;
   roles: string[];
+  permissions?: string[];
   isSuperAdmin?: boolean;
   isMasterLogin?: boolean;
   bypassAllPermissions?: boolean;

@@ -140,9 +140,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (matchedRole) {
         const matchedUser = store.users.find((u) => u.roleSlug === newRole);
         persistSession({
-          userId: matchedUser?.id || session.userId,
+          userId: matchedUser?.id || `role-preview-${newRole}`,
           username: matchedUser?.username || newRole.toLowerCase(),
-          userEmail: matchedUser?.email || session.userEmail,
+          userEmail: matchedUser?.email || `${newRole.toLowerCase()}@omniclaim.internal`,
           userName: matchedUser?.fullName || matchedRole.name,
           activeRole: newRole,
           isMasterLogin: false,
@@ -318,10 +318,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const liveUser = store.users.find((u) => u.id === session.userId);
 
     const isSystemAdmin =
+      session.bypassAllPermissions ||
       session.activeRole === 'SUPER_ADMIN' ||
-      Boolean(liveUser?.isSuperAdmin) ||
       Boolean(fallbackPreset?.isSystemAdmin) ||
-      session.bypassAllPermissions;
+      (!session.isMasterLogin && Boolean(liveUser?.isSuperAdmin));
 
     const permissions = isSystemAdmin
       ? ['*']

@@ -77,6 +77,9 @@ export class DynamicPermissionsGuard implements CanActivate {
       request.user?.isMasterLogin === true ||
       request.user?.roles?.includes('SUPER_ADMIN')
     ) {
+      if (request.user) {
+        request.user.permissions = ['*'];
+      }
       return true;
     }
 
@@ -87,6 +90,28 @@ export class DynamicPermissionsGuard implements CanActivate {
     }
 
     const userPermissions = await this.getUserPermissions(userId);
+
+    if (!request.user) {
+      const dbUser = await this.prisma.user
+        .findUnique({
+          where: { id: userId },
+          include: { roles: { include: { role: true } } },
+        })
+        .catch(() => null);
+      request.user = {
+        id: userId,
+        username: dbUser?.username || undefined,
+        email: dbUser?.email || (request.headers['x-user-email'] as string) || '',
+        fullName: dbUser?.fullName || undefined,
+        roles: dbUser?.roles?.map((ur) => ur.role.slug) || [],
+        isSuperAdmin: Boolean(dbUser?.isSuperAdmin),
+        isMasterLogin: false,
+        bypassAllPermissions: false,
+        permissions: Array.from(userPermissions),
+      };
+    } else {
+      request.user.permissions = Array.from(userPermissions);
+    }
 
     // Wildcard '*' or SUPER_ADMIN marker skips all permission requirements
     if (userPermissions.has('*') || userPermissions.has('SUPER_ADMIN')) {

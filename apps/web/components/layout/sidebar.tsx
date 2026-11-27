@@ -67,7 +67,7 @@ export function Sidebar() {
     }));
   }, [menus]);
 
-  const showSuperAdminShortcut = isSystemAdmin || isMasterLogin || bypassAllPermissions;
+  const showSuperAdminShortcut = isSystemAdmin || bypassAllPermissions;
 
   return (
     <aside className="w-64 border-r border-border/60 bg-card/60 flex flex-col shrink-0 min-h-[calc(100vh-3.5rem)] select-none">

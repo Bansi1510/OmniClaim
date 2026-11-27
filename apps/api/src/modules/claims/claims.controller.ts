@@ -8,6 +8,7 @@ import {
   Query,
   Delete,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { ClaimsService } from './claims.service';
@@ -85,6 +86,28 @@ export class ClaimsController {
     return this.claimsService.createClaim(dto, user.id);
   }
 
+  private isRestrictedToOwnClaims(user?: AuthenticatedUser): boolean {
+    if (!user) return false;
+    if (
+      user.isSuperAdmin ||
+      user.bypassAllPermissions ||
+      user.isMasterLogin ||
+      user.roles?.includes('SUPER_ADMIN') ||
+      user.permissions?.includes('*')
+    ) {
+      return false;
+    }
+    const operationalPerms = [
+      'claims:update',
+      'claims:approve',
+      'claims:settle',
+      'fraud:read',
+      'ledger:read',
+      'audit:read',
+    ];
+    return !operationalPerms.some((perm) => user.permissions?.includes(perm));
+  }
+
   @Get()
   @RequirePermissions('claims:read')
   @ApiOperation({ summary: 'List and filter claims queue' })
@@ -93,6 +116,7 @@ export class ClaimsController {
   @ApiQuery({ name: 'skip', type: Number, required: false })
   @ApiQuery({ name: 'take', type: Number, required: false })
   async listClaims(
+    @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: ClaimStatus,
     @Query('search') search?: string,
     @Query('skip') skip?: string,
@@ -100,9 +124,11 @@ export class ClaimsController {
   ) {
     const parsedSkip = skip !== undefined && skip !== '' ? Number(skip) : undefined;
     const parsedTake = take !== undefined && take !== '' ? Number(take) : undefined;
+    const policyHolderId = this.isRestrictedToOwnClaims(user) ? user.id : undefined;
     return this.claimsService.listClaims({
       status,
       search,
+      policyHolderId,
       skip: Number.isFinite(parsedSkip) ? parsedSkip : undefined,
       take: Number.isFinite(parsedTake) ? parsedTake : undefined,
     });
@@ -111,8 +137,12 @@ export class ClaimsController {
   @Get(':id')
   @RequirePermissions('claims:read')
   @ApiOperation({ summary: 'Fetch complete multi-modal claim detail dossier' })
-  async getClaim(@Param('id') id: string) {
-    return this.claimsService.getClaimById(id);
+  async getClaim(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const claim = await this.claimsService.getClaimById(id);
+    if (this.isRestrictedToOwnClaims(user) && claim.policy?.policyHolderId !== user.id) {
+      throw new ForbiddenException('You can only access claims belonging to your own policies.');
+    }
+    return claim;
   }
 
   @Patch(':id')

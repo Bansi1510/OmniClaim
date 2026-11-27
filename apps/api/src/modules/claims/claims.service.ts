@@ -183,15 +183,19 @@ export class ClaimsService {
   async listClaims(params: {
     status?: ClaimStatus;
     search?: string;
+    policyHolderId?: string;
     skip?: number;
     take?: number;
   }) {
-    const { status, search } = params;
+    const { status, search, policyHolderId } = params;
     const skip = Number.isFinite(Number(params.skip)) ? Math.max(0, Math.floor(Number(params.skip))) : 0;
     const take = Number.isFinite(Number(params.take)) ? Math.min(100, Math.max(1, Math.floor(Number(params.take)))) : 20;
 
     const where: any = {};
     if (status) where.status = status;
+    if (policyHolderId) {
+      where.policy = { policyHolderId };
+    }
     if (search) {
       where.OR = [
         { claimNumber: { contains: search, mode: 'insensitive' } },

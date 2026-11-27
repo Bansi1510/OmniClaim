@@ -1,7 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useDynamicStore } from '@/hooks/use-dynamic-store';
+import React, { useMemo, useState } from 'react';
+import {
+  useDynamicStore,
+  type DynamicPermission,
+} from '@/hooks/use-dynamic-store';
+import { DataGrid, type GridColumn } from '@/components/common/data-grid';
+import type { GridAction } from '@/components/common/grid-action-menu';
 import {
   PolicyMasterDto,
   VehiclePartCatalogDto,
@@ -104,23 +109,90 @@ export function PoliciesCrudTab({ onNotify }: NotifyProp) {
     setShowForm(false);
   };
 
+  const columns: GridColumn<PolicyMasterDto>[] = [
+    {
+      id: 'policy',
+      header: 'Policy # & Holder',
+      minWidth: 200,
+      accessor: (p) => `${p.policyNumber} ${p.policyHolderName}`,
+      summary: 'count',
+      cell: (p) => (
+        <div>
+          <div className="font-mono font-bold text-primary">{p.policyNumber}</div>
+          <div className="text-muted-foreground">{p.policyHolderName}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'vehicle',
+      header: 'Vehicle & VIN',
+      minWidth: 220,
+      accessor: (p) => `${p.vehicleYear} ${p.vehicleMake} ${p.vehicleModel} ${p.vehicleVin}`,
+      cell: (p) => (
+        <div>
+          <div className="font-semibold text-foreground">{p.vehicleYear} {p.vehicleMake} {p.vehicleModel}</div>
+          <div className="font-mono text-[10px] text-muted-foreground">{p.vehicleVin}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'coverageLimit',
+      header: 'Limit / Deductible',
+      align: 'right',
+      accessor: (p) => p.coverageLimit,
+      cell: (p) => (
+        <div className="font-mono">
+          <div className="font-bold text-foreground">${p.coverageLimit.toLocaleString()}</div>
+          <div className="text-[10px] text-muted-foreground">Ded: ${p.baseDeductible}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      align: 'center',
+      filterOptions: [
+        { label: 'Active', value: 'Active' },
+        { label: 'Suspended', value: 'Suspended' },
+      ],
+      accessor: (p) => (p.isActive ? 'Active' : 'Suspended'),
+      cell: (p) => (
+        <button
+          type="button"
+          onClick={() => {
+            updatePolicy(p.id, { isActive: !p.isActive });
+            onNotify(`Policy ${p.policyNumber} marked ${!p.isActive ? 'Active' : 'Inactive'}.`);
+          }}
+          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
+            p.isActive
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+              : 'border-rose-500/30 bg-rose-500/10 text-rose-500'
+          }`}
+        >
+          {p.isActive ? 'Active' : 'Suspended'}
+        </button>
+      ),
+    },
+  ];
+
+  const rowActions = (p: PolicyMasterDto): GridAction[] => [
+    { key: 'edit', label: 'Edit', icon: Edit2, onClick: () => openEdit(p) },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deletePolicy(p.id);
+        onNotify(`Policy ${p.policyNumber} deleted.`);
+      },
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">Dynamic Insurance Policies Master</h3>
-          <p className="text-xs text-muted-foreground">Add, edit, activate/suspend, or delete policies dynamically anytime.</p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 text-xs font-bold"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Policy
-        </button>
-      </div>
-
       {showForm && (
-        <form onSubmit={handleSubmit} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-4">
           <input required placeholder="Policy #" value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required placeholder="Policyholder Name" value={holderName} onChange={(e) => setHolderName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
           <input required placeholder="Vehicle VIN" value={vin} onChange={(e) => setVin(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono uppercase" />
@@ -129,67 +201,35 @@ export function PoliciesCrudTab({ onNotify }: NotifyProp) {
           <input required type="number" placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required type="number" placeholder="Coverage Limit ($)" value={coverageLimit} onChange={(e) => setCoverageLimit(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required type="number" placeholder="Base Deductible ($)" value={deductible} onChange={(e) => setDeductible(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
-          <div className="md:col-span-4 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 md:col-span-4">
             <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">
+            <button type="submit" className="rounded-lg bg-primary px-4 py-1.5 font-bold text-primary-foreground">
               {editing ? 'Update Policy' : 'Create Policy'}
             </button>
           </div>
         </form>
       )}
 
-      <div className="rounded-xl border border-border bg-card overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-            <tr>
-              <th className="py-2.5 px-3">Policy # &amp; Holder</th>
-              <th className="py-2.5 px-3">Vehicle &amp; VIN</th>
-              <th className="py-2.5 px-3 text-right">Limit / Deductible</th>
-              <th className="py-2.5 px-3 text-center">Status</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {policies.map((p) => (
-              <tr key={p.id} className="hover:bg-muted/20">
-                <td className="py-2.5 px-3">
-                  <div className="font-mono font-bold text-primary">{p.policyNumber}</div>
-                  <div className="text-muted-foreground">{p.policyHolderName}</div>
-                </td>
-                <td className="py-2.5 px-3">
-                  <div className="font-semibold text-foreground">{p.vehicleYear} {p.vehicleMake} {p.vehicleModel}</div>
-                  <div className="font-mono text-[10px] text-muted-foreground">{p.vehicleVin}</div>
-                </td>
-                <td className="py-2.5 px-3 text-right font-mono">
-                  <div className="font-bold text-foreground">${p.coverageLimit.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">Ded: ${p.baseDeductible}</div>
-                </td>
-                <td className="py-2.5 px-3 text-center">
-                  <button
-                    onClick={() => {
-                      updatePolicy(p.id, { isActive: !p.isActive });
-                      onNotify(`Policy ${p.policyNumber} marked ${!p.isActive ? 'Active' : 'Inactive'}.`);
-                    }}
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                      p.isActive
-                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-                        : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
-                    }`}
-                  >
-                    {p.isActive ? 'Active' : 'Suspended'}
-                  </button>
-                </td>
-                <td className="py-2.5 px-3 text-right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button onClick={() => openEdit(p)} className="rounded bg-muted p-1.5 hover:bg-muted/80" title="Edit"><Edit2 className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => { deletePolicy(p.id); onNotify(`Policy ${p.policyNumber} deleted.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5 hover:bg-rose-500/20" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<PolicyMasterDto>
+        title="Dynamic Insurance Policies Master"
+        subtitle="Add, edit, activate/suspend, or delete policies dynamically anytime"
+        data={policies}
+        columns={columns}
+        rowKey={(p) => p.id}
+        actions={rowActions}
+        selectable
+        pageSize={25}
+        exportFileName="omniclaim-policies"
+        searchPlaceholder="Search policy #, holder, VIN, vehicle..."
+        toolbar={
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Policy
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -273,30 +313,153 @@ export function PartsAndDepreciationTab({ onNotify }: NotifyProp) {
     setShowDepForm(false);
   };
 
+  const partColumns: GridColumn<VehiclePartCatalogDto>[] = [
+    {
+      id: 'part',
+      header: 'Code & Part',
+      minWidth: 200,
+      accessor: (p) => `${p.partCode} ${p.partName}`,
+      summary: 'count',
+      cell: (p) => (
+        <div>
+          <span className="block font-mono font-bold text-primary">{p.partCode}</span>
+          <span className="font-medium text-foreground">{p.partName}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'materialType',
+      header: 'Part / Material',
+      filterOptions: [
+        { label: 'PLASTIC', value: 'PLASTIC' },
+        { label: 'METAL', value: 'METAL' },
+        { label: 'GLASS', value: 'GLASS' },
+        { label: 'RUBBER', value: 'RUBBER' },
+        { label: 'FIBERGLASS', value: 'FIBERGLASS' },
+      ],
+      accessor: (p) => p.materialType,
+      cell: (p) => <span className="font-mono text-[11px]">{p.partType} · {p.materialType}</span>,
+    },
+    {
+      id: 'oemBasePrice',
+      header: 'OEM / Aftermarket',
+      align: 'right',
+      accessor: (p) => p.oemBasePrice,
+      cell: (p) => (
+        <div className="font-mono">
+          <span className="font-bold text-foreground">${p.oemBasePrice.toFixed(2)}</span>
+          <span className="block text-[10px] text-muted-foreground">AM: ${p.aftermarketPrice.toFixed(2)}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'defaultLaborHours',
+      header: 'Labor Hrs',
+      align: 'center',
+      accessor: (p) => p.defaultLaborHours,
+      cell: (p) => <span className="font-mono">{p.defaultLaborHours}h</span>,
+    },
+  ];
+
+  const partActions = (p: VehiclePartCatalogDto): GridAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: Edit2,
+      onClick: () => {
+        setEditPart(p);
+        setPartCode(p.partCode);
+        setPartName(p.partName);
+        setPartType(p.partType);
+        setMaterialType(p.materialType);
+        setOemBasePrice(String(p.oemBasePrice));
+        setAftermarketPrice(String(p.aftermarketPrice));
+        setLaborHours(String(p.defaultLaborHours));
+        setShowPartForm(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deletePart(p.id);
+        onNotify(`Part ${p.partCode} removed.`);
+      },
+    },
+  ];
+
+  const depColumns: GridColumn<DepreciationRuleDto>[] = [
+    {
+      id: 'name',
+      header: 'Rule Title',
+      minWidth: 200,
+      accessor: (r) => r.name,
+      summary: 'count',
+      cell: (r) => <span className="font-semibold text-foreground">{r.name}</span>,
+    },
+    {
+      id: 'materialType',
+      header: 'Material',
+      filterOptions: [
+        { label: 'METAL', value: 'METAL' },
+        { label: 'PLASTIC', value: 'PLASTIC' },
+        { label: 'GLASS', value: 'GLASS' },
+        { label: 'RUBBER', value: 'RUBBER' },
+        { label: 'FIBERGLASS', value: 'FIBERGLASS' },
+      ],
+      accessor: (r) => r.materialType,
+      cell: (r) => <span className="font-mono text-primary">{r.materialType}</span>,
+    },
+    {
+      id: 'ageBand',
+      header: 'Age Band (Yrs)',
+      align: 'center',
+      accessor: (r) => `${r.minVehicleAgeYears} - ${r.maxVehicleAgeYears}`,
+      cell: (r) => <span className="font-mono">{r.minVehicleAgeYears} – {r.maxVehicleAgeYears} yrs</span>,
+    },
+    {
+      id: 'depreciationPercent',
+      header: 'Depreciation %',
+      align: 'center',
+      accessor: (r) => r.depreciationPercent,
+      cell: (r) => <span className="font-mono font-bold text-amber-400">{r.depreciationPercent}%</span>,
+    },
+  ];
+
+  const depActions = (r: DepreciationRuleDto): GridAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: Edit2,
+      onClick: () => {
+        setEditDep(r);
+        setDepName(r.name);
+        setDepMaterial(r.materialType);
+        setMinAge(String(r.minVehicleAgeYears));
+        setMaxAge(String(r.maxVehicleAgeYears));
+        setDepPct(String(r.depreciationPercent));
+        setShowDepForm(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deleteDepreciationRule(r.id);
+        onNotify('Depreciation rule deleted.');
+      },
+    },
+  ];
+
   return (
     <div className="space-y-8">
-      {/* Parts Catalog */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Dynamic Vehicle Parts &amp; Pricing Catalog</h3>
-            <p className="text-xs text-muted-foreground">Real-time OEM/Aftermarket reference pricing &amp; labor benchmarks.</p>
-          </div>
-          <button
-            onClick={() => {
-              setEditPart(null);
-              setPartCode(`PRT-${Math.floor(100 + Math.random() * 900)}`);
-              setPartName('');
-              setShowPartForm(true);
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Part
-          </button>
-        </div>
-
         {showPartForm && (
-          <form onSubmit={savePart} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <form onSubmit={savePart} className="grid grid-cols-2 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-4">
             <input required placeholder="Part Code" value={partCode} onChange={(e) => setPartCode(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <input required placeholder="Part Name" value={partName} onChange={(e) => setPartName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
             <select value={partType} onChange={(e) => setPartType(e.target.value as VehiclePartType)} className="rounded-lg border border-border bg-background px-3 py-1.5">
@@ -321,87 +484,40 @@ export function PartsAndDepreciationTab({ onNotify }: NotifyProp) {
             <input required type="number" step="0.5" placeholder="Labor Hours" value={laborHours} onChange={(e) => setLaborHours(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowPartForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-              <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 font-bold">Save</button>
+              <button type="submit" className="rounded-lg bg-primary px-3 py-1.5 font-bold text-primary-foreground">Save</button>
             </div>
           </form>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-              <tr>
-                <th className="py-2.5 px-3">Code &amp; Part</th>
-                <th className="py-2.5 px-3">Part / Material</th>
-                <th className="py-2.5 px-3 text-right">OEM / Aftermarket</th>
-                <th className="py-2.5 px-3 text-center">Labor Hrs</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {partsCatalog.map((p) => (
-                <tr key={p.id} className="hover:bg-muted/20">
-                  <td className="py-2.5 px-3">
-                    <span className="font-mono font-bold text-primary block">{p.partCode}</span>
-                    <span className="font-medium text-foreground">{p.partName}</span>
-                  </td>
-                  <td className="py-2.5 px-3 font-mono text-[11px]">{p.partType} · {p.materialType}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    <span className="font-bold text-foreground">${p.oemBasePrice.toFixed(2)}</span>
-                    <span className="block text-[10px] text-muted-foreground">AM: ${p.aftermarketPrice.toFixed(2)}</span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono">{p.defaultLaborHours}h</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setEditPart(p);
-                          setPartCode(p.partCode);
-                          setPartName(p.partName);
-                          setPartType(p.partType);
-                          setMaterialType(p.materialType);
-                          setOemBasePrice(String(p.oemBasePrice));
-                          setAftermarketPrice(String(p.aftermarketPrice));
-                          setLaborHours(String(p.defaultLaborHours));
-                          setShowPartForm(true);
-                        }}
-                        className="rounded bg-muted p-1.5"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => { deletePart(p.id); onNotify(`Part ${p.partCode} removed.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<VehiclePartCatalogDto>
+          title="Dynamic Vehicle Parts & Pricing Catalog"
+          subtitle="Real-time OEM/Aftermarket reference pricing & labor benchmarks"
+          data={partsCatalog}
+          columns={partColumns}
+          rowKey={(p) => p.id}
+          actions={partActions}
+          pageSize={10}
+          exportFileName="omniclaim-parts-catalog"
+          toolbar={
+            <button
+              onClick={() => {
+                setEditPart(null);
+                setPartCode(`PRT-${Math.floor(100 + Math.random() * 900)}`);
+                setPartName('');
+                setShowPartForm(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Part
+            </button>
+          }
+        />
       </div>
 
-      {/* Dynamic Depreciation Rules */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Dynamic Actuarial Depreciation Schedule</h3>
-            <p className="text-xs text-muted-foreground">Modify age brackets &amp; material depreciation percentages live.</p>
-          </div>
-          <button
-            onClick={() => {
-              setEditDep(null);
-              setDepName('');
-              setShowDepForm(true);
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Depreciation Rule
-          </button>
-        </div>
-
         {showDepForm && (
-          <form onSubmit={saveDep} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
-            <input required placeholder="Rule Name" value={depName} onChange={(e) => setDepName(e.target.value)} className="md:col-span-2 rounded-lg border border-border bg-background px-3 py-1.5" />
+          <form onSubmit={saveDep} className="grid grid-cols-2 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-6">
+            <input required placeholder="Rule Name" value={depName} onChange={(e) => setDepName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 md:col-span-2" />
             <select value={depMaterial} onChange={(e) => setDepMaterial(e.target.value as MaterialType)} className="rounded-lg border border-border bg-background px-3 py-1.5">
               <option value="METAL">METAL</option>
               <option value="PLASTIC">PLASTIC</option>
@@ -412,57 +528,35 @@ export function PartsAndDepreciationTab({ onNotify }: NotifyProp) {
             <input required type="number" placeholder="Min Age" value={minAge} onChange={(e) => setMinAge(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <input required type="number" placeholder="Max Age" value={maxAge} onChange={(e) => setMaxAge(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <input required type="number" placeholder="Dep %" value={depPct} onChange={(e) => setDepPct(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
-            <div className="md:col-span-6 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 md:col-span-6">
               <button type="button" onClick={() => setShowDepForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-              <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">Save Rule</button>
+              <button type="submit" className="rounded-lg bg-primary px-4 py-1.5 font-bold text-primary-foreground">Save Rule</button>
             </div>
           </form>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-              <tr>
-                <th className="py-2.5 px-3">Rule Title</th>
-                <th className="py-2.5 px-3">Material</th>
-                <th className="py-2.5 px-3 text-center">Age Band (Yrs)</th>
-                <th className="py-2.5 px-3 text-center">Depreciation %</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {depreciationRules.map((r) => (
-                <tr key={r.id} className="hover:bg-muted/20">
-                  <td className="py-2.5 px-3 font-semibold text-foreground">{r.name}</td>
-                  <td className="py-2.5 px-3 font-mono text-primary">{r.materialType}</td>
-                  <td className="py-2.5 px-3 text-center font-mono">{r.minVehicleAgeYears} – {r.maxVehicleAgeYears} yrs</td>
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-amber-400">{r.depreciationPercent}%</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setEditDep(r);
-                          setDepName(r.name);
-                          setDepMaterial(r.materialType);
-                          setMinAge(String(r.minVehicleAgeYears));
-                          setMaxAge(String(r.maxVehicleAgeYears));
-                          setDepPct(String(r.depreciationPercent));
-                          setShowDepForm(true);
-                        }}
-                        className="rounded bg-muted p-1.5"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => { deleteDepreciationRule(r.id); onNotify(`Depreciation rule deleted.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<DepreciationRuleDto>
+          title="Dynamic Actuarial Depreciation Schedule"
+          subtitle="Modify age brackets & material depreciation percentages live"
+          data={depreciationRules}
+          columns={depColumns}
+          rowKey={(r) => r.id}
+          actions={depActions}
+          pageSize={10}
+          exportFileName="omniclaim-depreciation-rules"
+          toolbar={
+            <button
+              onClick={() => {
+                setEditDep(null);
+                setDepName('');
+                setShowDepForm(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Depreciation Rule
+            </button>
+          }
+        />
       </div>
     </div>
   );
@@ -508,28 +602,117 @@ export function AutomationRulesTab({ onNotify }: NotifyProp) {
     setShowForm(false);
   };
 
+  const columns: GridColumn<AutomationRuleDto>[] = [
+    {
+      id: 'rule',
+      header: 'Rule & Description',
+      minWidth: 220,
+      accessor: (r) => `${r.name} ${r.description || ''}`,
+      summary: 'count',
+      cell: (r) => (
+        <div>
+          <div className="font-bold text-foreground">{r.name}</div>
+          <div className="text-[11px] text-muted-foreground">{r.description}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'ruleType',
+      header: 'Type',
+      align: 'center',
+      filterOptions: [
+        { label: 'STP', value: 'STP' },
+        { label: 'FRAUD', value: 'FRAUD' },
+        { label: 'WORKFLOW', value: 'WORKFLOW' },
+      ],
+      accessor: (r) => r.ruleType,
+      cell: (r) => (
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+            r.ruleType === 'STP' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+          }`}
+        >
+          {r.ruleType}
+        </span>
+      ),
+    },
+    {
+      id: 'condition',
+      header: 'Condition',
+      accessor: (r) => `${r.metricKey} ${r.operator} ${r.thresholdValue}`,
+      cell: (r) => <span className="font-mono text-primary">{r.metricKey} {r.operator} {r.thresholdValue}</span>,
+    },
+    {
+      id: 'weightAction',
+      header: 'Weight / Action',
+      align: 'center',
+      accessor: (r) => `+${r.riskWeight} ${r.action}`,
+      cell: (r) => (
+        <span className="font-mono">
+          <span className="font-bold text-amber-400">+{r.riskWeight}</span> · {r.action}
+        </span>
+      ),
+    },
+    {
+      id: 'isActive',
+      header: 'Enabled',
+      align: 'center',
+      filterOptions: [
+        { label: 'ON', value: 'ON' },
+        { label: 'OFF', value: 'OFF' },
+      ],
+      accessor: (r) => (r.isActive ? 'ON' : 'OFF'),
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => {
+            updateAutomationRule(r.id, { isActive: !r.isActive });
+            onNotify(`Rule "${r.name}" ${!r.isActive ? 'enabled' : 'disabled'}.`);
+          }}
+          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+            r.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {r.isActive ? 'ON' : 'OFF'}
+        </button>
+      ),
+    },
+  ];
+
+  const rowActions = (r: AutomationRuleDto): GridAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: Edit2,
+      onClick: () => {
+        setEditing(r);
+        setName(r.name);
+        setRuleType(r.ruleType);
+        setMetricKey(r.metricKey);
+        setOperator(r.operator);
+        setThresholdValue(r.thresholdValue);
+        setRiskWeight(String(r.riskWeight));
+        setAction(r.action);
+        setDescription(r.description || '');
+        setShowForm(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deleteAutomationRule(r.id);
+        onNotify(`Rule "${r.name}" deleted.`);
+      },
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">Dynamic STP &amp; Fraud Rules Engine</h3>
-          <p className="text-xs text-muted-foreground">Create, tune weights/thresholds, toggle on/off, or delete engine rules anytime.</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setName('');
-            setDescription('');
-            setShowForm(true);
-          }}
-          className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Rule
-        </button>
-      </div>
-
       {showForm && (
-        <form onSubmit={handleSave} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+        <form onSubmit={handleSave} className="grid grid-cols-1 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-4">
           <input required placeholder="Rule Name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
           <select value={ruleType} onChange={(e) => setRuleType(e.target.value as AutomationRuleType)} className="rounded-lg border border-border bg-background px-3 py-1.5">
             <option value="STP">STP</option>
@@ -549,85 +732,37 @@ export function AutomationRulesTab({ onNotify }: NotifyProp) {
           </div>
           <input type="number" placeholder="Risk Weight" value={riskWeight} onChange={(e) => setRiskWeight(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required placeholder="Action (e.g. FLAG_SIU)" value={action} onChange={(e) => setAction(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
-          <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="md:col-span-2 rounded-lg border border-border bg-background px-3 py-1.5" />
-          <div className="md:col-span-4 flex justify-end gap-2">
+          <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 md:col-span-2" />
+          <div className="flex justify-end gap-2 md:col-span-4">
             <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">Save Rule</button>
+            <button type="submit" className="rounded-lg bg-primary px-4 py-1.5 font-bold text-primary-foreground">Save Rule</button>
           </div>
         </form>
       )}
 
-      <div className="rounded-xl border border-border bg-card overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-            <tr>
-              <th className="py-2.5 px-3">Rule &amp; Type</th>
-              <th className="py-2.5 px-3">Condition</th>
-              <th className="py-2.5 px-3 text-center">Weight / Action</th>
-              <th className="py-2.5 px-3 text-center">Enabled</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {automationRules.map((r) => (
-              <tr key={r.id} className="hover:bg-muted/20">
-                <td className="py-2.5 px-3">
-                  <div className="font-bold text-foreground flex items-center gap-2">
-                    <span>{r.name}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                      r.ruleType === 'STP' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
-                    }`}>{r.ruleType}</span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">{r.description}</div>
-                </td>
-                <td className="py-2.5 px-3 font-mono text-primary">
-                  {r.metricKey} {r.operator} {r.thresholdValue}
-                </td>
-                <td className="py-2.5 px-3 text-center font-mono">
-                  <span className="font-bold text-amber-400">+{r.riskWeight}</span> · {r.action}
-                </td>
-                <td className="py-2.5 px-3 text-center">
-                  <button
-                    onClick={() => {
-                      updateAutomationRule(r.id, { isActive: !r.isActive });
-                      onNotify(`Rule "${r.name}" ${!r.isActive ? 'enabled' : 'disabled'}.`);
-                    }}
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                      r.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {r.isActive ? 'ON' : 'OFF'}
-                  </button>
-                </td>
-                <td className="py-2.5 px-3 text-right">
-                  <div className="flex justify-end gap-1.5">
-                    <button
-                      onClick={() => {
-                        setEditing(r);
-                        setName(r.name);
-                        setRuleType(r.ruleType);
-                        setMetricKey(r.metricKey);
-                        setOperator(r.operator);
-                        setThresholdValue(r.thresholdValue);
-                        setRiskWeight(String(r.riskWeight));
-                        setAction(r.action);
-                        setDescription(r.description || '');
-                        setShowForm(true);
-                      }}
-                      className="rounded bg-muted p-1.5"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => { deleteAutomationRule(r.id); onNotify(`Rule "${r.name}" deleted.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<AutomationRuleDto>
+        title="Dynamic STP & Fraud Rules Engine"
+        subtitle="Create, tune weights/thresholds, toggle on/off, or delete engine rules anytime"
+        data={automationRules}
+        columns={columns}
+        rowKey={(r) => r.id}
+        actions={rowActions}
+        pageSize={25}
+        exportFileName="omniclaim-automation-rules"
+        toolbar={
+          <button
+            onClick={() => {
+              setEditing(null);
+              setName('');
+              setDescription('');
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Rule
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -669,115 +804,143 @@ export function GaragesCrudTab({ onNotify }: NotifyProp) {
     setShowForm(false);
   };
 
+  const columns: GridColumn<RepairGarageDto>[] = [
+    {
+      id: 'garage',
+      header: 'Code & Name',
+      minWidth: 200,
+      accessor: (g) => `${g.code} ${g.name}`,
+      summary: 'count',
+      cell: (g) => (
+        <div>
+          <span className="block font-mono font-bold text-primary">{g.code}</span>
+          <span className="font-semibold text-foreground">{g.name}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'city',
+      header: 'City',
+      accessor: (g) => g.city,
+      cell: (g) => <span className="text-muted-foreground">{g.city}</span>,
+    },
+    {
+      id: 'hourlyLaborRate',
+      header: 'Labor Rate',
+      align: 'right',
+      accessor: (g) => g.hourlyLaborRate,
+      cell: (g) => <span className="font-mono font-bold">${g.hourlyLaborRate}/hr</span>,
+    },
+    {
+      id: 'networkTier',
+      header: 'Network Tier',
+      align: 'center',
+      filterOptions: [
+        { label: 'Preferred', value: 'Preferred' },
+        { label: 'Blacklisted', value: 'Blacklisted' },
+        { label: 'Standard', value: 'Standard' },
+      ],
+      accessor: (g) => (g.isBlacklisted ? 'Blacklisted' : g.isPreferredNetwork ? 'Preferred' : 'Standard'),
+      cell: (g) => (
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              updateGarage(g.id, { isPreferredNetwork: !g.isPreferredNetwork, isBlacklisted: false });
+              onNotify(`Updated preferred status for ${g.name}.`);
+            }}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+              g.isPreferredNetwork ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Star className="h-2.5 w-2.5" /> Preferred
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              updateGarage(g.id, { isBlacklisted: !g.isBlacklisted, isPreferredNetwork: false });
+              onNotify(`${g.name} ${!g.isBlacklisted ? 'BLACKLISTED' : 'removed from blacklist'}.`);
+            }}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+              g.isBlacklisted ? 'bg-rose-500/20 text-rose-400' : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <Ban className="h-2.5 w-2.5" /> {g.isBlacklisted ? 'Blacklisted' : 'Clean'}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const rowActions = (g: RepairGarageDto): GridAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: Edit2,
+      onClick: () => {
+        setEditing(g);
+        setCode(g.code);
+        setName(g.name);
+        setCity(g.city);
+        setRate(String(g.hourlyLaborRate));
+        setRating(String(g.rating));
+        setEmail(g.email || '');
+        setShowForm(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deleteGarage(g.id);
+        onNotify(`Garage ${g.name} deleted.`);
+      },
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">Dynamic Repair Garage Network &amp; Blacklist</h3>
-          <p className="text-xs text-muted-foreground">Manage preferred repair centers, hourly labor caps, and SIU blacklists.</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setCode(`GRG-${Math.floor(100 + Math.random() * 900)}`);
-            setName('');
-            setCity('');
-            setEmail('');
-            setShowForm(true);
-          }}
-          className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Garage
-        </button>
-      </div>
-
       {showForm && (
-        <form onSubmit={handleSave} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+        <form onSubmit={handleSave} className="grid grid-cols-2 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-6">
           <input required placeholder="Garage Code" value={code} onChange={(e) => setCode(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
-          <input required placeholder="Shop Name" value={name} onChange={(e) => setName(e.target.value)} className="md:col-span-2 rounded-lg border border-border bg-background px-3 py-1.5" />
+          <input required placeholder="Shop Name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 md:col-span-2" />
           <input required placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
           <input required type="number" placeholder="Labor $/hr" value={rate} onChange={(e) => setRate(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required type="number" step="0.1" placeholder="Rating" value={rating} onChange={(e) => setRating(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
-          <div className="md:col-span-6 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 md:col-span-6">
             <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">Save Garage</button>
+            <button type="submit" className="rounded-lg bg-primary px-4 py-1.5 font-bold text-primary-foreground">Save Garage</button>
           </div>
         </form>
       )}
 
-      <div className="rounded-xl border border-border bg-card overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-            <tr>
-              <th className="py-2.5 px-3">Code &amp; Name</th>
-              <th className="py-2.5 px-3">City</th>
-              <th className="py-2.5 px-3 text-right">Labor Rate</th>
-              <th className="py-2.5 px-3 text-center">Network Tier</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {garages.map((g) => (
-              <tr key={g.id} className="hover:bg-muted/20">
-                <td className="py-2.5 px-3">
-                  <span className="font-mono font-bold text-primary block">{g.code}</span>
-                  <span className="font-semibold text-foreground">{g.name}</span>
-                </td>
-                <td className="py-2.5 px-3 text-muted-foreground">{g.city}</td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold">${g.hourlyLaborRate}/hr</td>
-                <td className="py-2.5 px-3 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        updateGarage(g.id, { isPreferredNetwork: !g.isPreferredNetwork, isBlacklisted: false });
-                        onNotify(`Updated preferred status for ${g.name}.`);
-                      }}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        g.isPreferredNetwork ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      <Star className="h-2.5 w-2.5" /> Preferred
-                    </button>
-                    <button
-                      onClick={() => {
-                        updateGarage(g.id, { isBlacklisted: !g.isBlacklisted, isPreferredNetwork: false });
-                        onNotify(`${g.name} ${!g.isBlacklisted ? 'BLACKLISTED' : 'removed from blacklist'}.`);
-                      }}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        g.isBlacklisted ? 'bg-rose-500/20 text-rose-400' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      <Ban className="h-2.5 w-2.5" /> {g.isBlacklisted ? 'Blacklisted' : 'Clean'}
-                    </button>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-right">
-                  <div className="flex justify-end gap-1.5">
-                    <button
-                      onClick={() => {
-                        setEditing(g);
-                        setCode(g.code);
-                        setName(g.name);
-                        setCity(g.city);
-                        setRate(String(g.hourlyLaborRate));
-                        setRating(String(g.rating));
-                        setEmail(g.email || '');
-                        setShowForm(true);
-                      }}
-                      className="rounded bg-muted p-1.5"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => { deleteGarage(g.id); onNotify(`Garage ${g.name} deleted.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<RepairGarageDto>
+        title="Dynamic Repair Garage Network & Blacklist"
+        subtitle="Manage preferred repair centers, hourly labor caps, and SIU blacklists"
+        data={garages}
+        columns={columns}
+        rowKey={(g) => g.id}
+        actions={rowActions}
+        pageSize={25}
+        exportFileName="omniclaim-garages"
+        toolbar={
+          <button
+            onClick={() => {
+              setEditing(null);
+              setCode(`GRG-${Math.floor(100 + Math.random() * 900)}`);
+              setName('');
+              setCity('');
+              setEmail('');
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Garage
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -852,34 +1015,149 @@ export function MenusAndPermissionsTab({ onNotify }: NotifyProp) {
 
   const parentMenus = menus.filter((m) => !m.parentKey);
 
+  const menuColumns: GridColumn<DynamicMenuItemDto>[] = [
+    {
+      id: 'labelKey',
+      header: 'Label & Key',
+      minWidth: 200,
+      accessor: (m) => `${m.label} ${m.menuKey}`,
+      summary: 'count',
+      cell: (m) => (
+        <div>
+          <span className={`font-bold ${m.parentKey ? 'pl-4 text-muted-foreground' : 'text-foreground'}`}>
+            {m.parentKey ? '↳ ' : ''}{m.label}
+          </span>
+          <span className="block font-mono text-[10px] text-muted-foreground">{m.menuKey}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'navLink',
+      header: 'Parent / Route',
+      accessor: (m) => m.navLink || '(Group Folder)',
+      cell: (m) => <span className="font-mono text-[11px]">{m.navLink || '(Group Folder)'}</span>,
+    },
+    {
+      id: 'requiredPermission',
+      header: 'Required Permission',
+      accessor: (m) => m.requiredPermission || 'Public',
+      cell: (m) => <span className="font-mono text-primary">{m.requiredPermission || 'Public'}</span>,
+    },
+    {
+      id: 'orderVisibility',
+      header: 'Order / Visibility',
+      align: 'center',
+      filterOptions: [
+        { label: 'Visible', value: 'Visible' },
+        { label: 'Hidden', value: 'Hidden' },
+      ],
+      accessor: (m) => (m.isVisible ? 'Visible' : 'Hidden'),
+      cell: (m) => (
+        <div className="inline-flex items-center gap-1">
+          <button type="button" onClick={() => moveMenuOrder(m.id, 'UP')} className="rounded bg-muted p-1 hover:bg-muted/80" title="Move Up">
+            <ArrowUp className="h-3 w-3" />
+          </button>
+          <button type="button" onClick={() => moveMenuOrder(m.id, 'DOWN')} className="rounded bg-muted p-1 hover:bg-muted/80" title="Move Down">
+            <ArrowDown className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              updateMenu(m.id, { isVisible: !m.isVisible });
+              onNotify(`Menu "${m.label}" ${!m.isVisible ? 'shown' : 'hidden'}.`);
+            }}
+            className={`rounded p-1 ${m.isVisible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}
+            title="Toggle Visibility"
+          >
+            {m.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const menuActions = (m: DynamicMenuItemDto): GridAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: Edit2,
+      onClick: () => {
+        setEditMenu(m);
+        setMenuKey(m.menuKey);
+        setLabel(m.label);
+        setNavLink(m.navLink || '');
+        setParentKey(m.parentKey || '');
+        setRequiredPerm(m.requiredPermission || '');
+        setBadgeName(m.badgeName || '');
+        setShowMenuForm(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deleteMenu(m.id);
+        onNotify(`Menu "${m.label}" deleted.`);
+      },
+    },
+  ];
+
+  const permModuleOptions = useMemo(() => {
+    const mods = Array.from(new Set(permissionsCatalog.map((p) => p.module))).sort();
+    return mods.map((m) => ({ label: m, value: m }));
+  }, [permissionsCatalog]);
+
+  const permColumns: GridColumn<DynamicPermission>[] = [
+    {
+      id: 'slug',
+      header: 'Permission Slug',
+      accessor: (p) => p.slug,
+      summary: 'count',
+      cell: (p) => <span className="font-mono font-bold text-primary">{p.slug}</span>,
+    },
+    {
+      id: 'module',
+      header: 'Module',
+      filterOptions: permModuleOptions,
+      accessor: (p) => p.module,
+      cell: (p) => <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-bold">{p.module}</span>,
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      accessor: (p) => p.action,
+      cell: (p) => <span className="font-mono text-[11px]">{p.action}</span>,
+    },
+    {
+      id: 'description',
+      header: 'Description',
+      minWidth: 240,
+      accessor: (p) => p.description,
+      cell: (p) => <span className="text-muted-foreground">{p.description}</span>,
+    },
+  ];
+
+  const permActions = (p: DynamicPermission): GridAction[] => [
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      tone: 'danger',
+      onClick: () => {
+        deletePermission(p.id);
+        onNotify(`Permission ${p.slug} deleted.`);
+      },
+    },
+  ];
+
   return (
     <div className="space-y-8">
       {/* Live Sidebar Menu Builder */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Dynamic Sidebar Menu Builder (Live College ERP MenuOrder)</h3>
-            <p className="text-xs text-muted-foreground">Add, edit, reorder, hide/show, or delete sidebar menu items — takes effect instantly!</p>
-          </div>
-          <button
-            onClick={() => {
-              setEditMenu(null);
-              setMenuKey(`custom-${Date.now().toString().slice(-4)}`);
-              setLabel('');
-              setNavLink('/claims');
-              setParentKey('');
-              setRequiredPerm('');
-              setBadgeName('');
-              setShowMenuForm(true);
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Menu Item
-          </button>
-        </div>
-
         {showMenuForm && (
-          <form onSubmit={saveMenu} className="rounded-xl border border-primary/30 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <form onSubmit={saveMenu} className="grid grid-cols-1 gap-3 rounded-xl border border-primary/30 bg-muted/20 p-4 text-xs md:grid-cols-3">
             <input required placeholder="Menu Key" value={menuKey} onChange={(e) => setMenuKey(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <input required placeholder="Display Label" value={label} onChange={(e) => setLabel(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
             <input placeholder="Route Link (e.g. /claims)" value={navLink} onChange={(e) => setNavLink(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
@@ -891,105 +1169,65 @@ export function MenusAndPermissionsTab({ onNotify }: NotifyProp) {
             </select>
             <input placeholder="Required Permission (optional)" value={requiredPerm} onChange={(e) => setRequiredPerm(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
             <input placeholder="Badge Label (optional)" value={badgeName} onChange={(e) => setBadgeName(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
-            <div className="md:col-span-3 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 md:col-span-3">
               <button type="button" onClick={() => setShowMenuForm(false)} className="rounded-lg border border-border px-3 py-1.5">Cancel</button>
-              <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 font-bold">Save Menu</button>
+              <button type="submit" className="rounded-lg bg-primary px-4 py-1.5 font-bold text-primary-foreground">Save Menu</button>
             </div>
           </form>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase">
-              <tr>
-                <th className="py-2.5 px-3">Label &amp; Key</th>
-                <th className="py-2.5 px-3">Parent / Route</th>
-                <th className="py-2.5 px-3">Required Permission</th>
-                <th className="py-2.5 px-3 text-center">Order / Visibility</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {menus.map((m) => (
-                <tr key={m.id} className="hover:bg-muted/20">
-                  <td className="py-2 px-3">
-                    <span className={`font-bold ${m.parentKey ? 'pl-4 text-muted-foreground' : 'text-foreground'}`}>
-                      {m.parentKey ? '↳ ' : ''}{m.label}
-                    </span>
-                    <span className="block font-mono text-[10px] text-muted-foreground">{m.menuKey}</span>
-                  </td>
-                  <td className="py-2 px-3 font-mono text-[11px]">{m.navLink || '(Group Folder)'}</td>
-                  <td className="py-2 px-3 font-mono text-primary">{m.requiredPermission || 'Public'}</td>
-                  <td className="py-2 px-3 text-center">
-                    <div className="inline-flex items-center gap-1">
-                      <button onClick={() => moveMenuOrder(m.id, 'UP')} className="rounded bg-muted p-1 hover:bg-muted/80" title="Move Up"><ArrowUp className="h-3 w-3" /></button>
-                      <button onClick={() => moveMenuOrder(m.id, 'DOWN')} className="rounded bg-muted p-1 hover:bg-muted/80" title="Move Down"><ArrowDown className="h-3 w-3" /></button>
-                      <button
-                        onClick={() => {
-                          updateMenu(m.id, { isVisible: !m.isVisible });
-                          onNotify(`Menu "${m.label}" ${!m.isVisible ? 'shown' : 'hidden'}.`);
-                        }}
-                        className={`rounded p-1 ${m.isVisible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}
-                        title="Toggle Visibility"
-                      >
-                        {m.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                      </button>
-                    </div>
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setEditMenu(m);
-                          setMenuKey(m.menuKey);
-                          setLabel(m.label);
-                          setNavLink(m.navLink || '');
-                          setParentKey(m.parentKey || '');
-                          setRequiredPerm(m.requiredPermission || '');
-                          setBadgeName(m.badgeName || '');
-                          setShowMenuForm(true);
-                        }}
-                        className="rounded bg-muted p-1.5"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => { deleteMenu(m.id); onNotify(`Menu "${m.label}" deleted.`); }} className="rounded bg-rose-500/10 text-rose-500 p-1.5">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<DynamicMenuItemDto>
+          title="Dynamic Sidebar Menu Builder (Live College ERP MenuOrder)"
+          subtitle="Add, edit, reorder, hide/show, or delete sidebar menu items — takes effect instantly!"
+          data={menus}
+          columns={menuColumns}
+          rowKey={(m) => m.id}
+          actions={menuActions}
+          pageSize={25}
+          exportFileName="omniclaim-menus"
+          toolbar={
+            <button
+              onClick={() => {
+                setEditMenu(null);
+                setMenuKey(`custom-${Date.now().toString().slice(-4)}`);
+                setLabel('');
+                setNavLink('/claims');
+                setParentKey('');
+                setRequiredPerm('');
+                setBadgeName('');
+                setShowMenuForm(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Menu Item
+            </button>
+          }
+        />
       </div>
 
       {/* Granular Dynamic Permissions Catalog */}
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-foreground">Dynamic RBAC Permissions Catalog ({permissionsCatalog.length} Slugs)</h3>
-        <form onSubmit={handleAddPerm} className="rounded-xl border border-border bg-muted/20 p-3 grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+        <form onSubmit={handleAddPerm} className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-muted/20 p-3 text-xs md:grid-cols-5">
           <input required placeholder="Slug (e.g. claims:export_pdf)" value={permSlug} onChange={(e) => setPermSlug(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono" />
           <input required placeholder="Module (e.g. CLAIMS)" value={permMod} onChange={(e) => setPermMod(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 uppercase" />
           <input required placeholder="Action Label" value={permAction} onChange={(e) => setPermAction(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5 uppercase" />
           <input placeholder="Description" value={permDesc} onChange={(e) => setPermDesc(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-1.5" />
-          <button type="submit" className="rounded-lg bg-primary text-primary-foreground font-bold px-3 py-1.5 flex items-center justify-center gap-1">
+          <button type="submit" className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 font-bold text-primary-foreground">
             <CheckCircle2 className="h-3.5 w-3.5" /> Add Permission
           </button>
         </form>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          {permissionsCatalog.map((p) => (
-            <div key={p.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2 text-xs">
-              <div>
-                <div className="font-mono font-bold text-primary">{p.slug}</div>
-                <div className="text-[10px] text-muted-foreground">{p.module} · {p.description}</div>
-              </div>
-              <button onClick={() => { deletePermission(p.id); onNotify(`Permission ${p.slug} deleted.`); }} className="text-rose-500 hover:bg-rose-500/10 p-1 rounded">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
+
+        <DataGrid<DynamicPermission>
+          title={`Dynamic RBAC Permissions Catalog (${permissionsCatalog.length} Slugs)`}
+          subtitle="Granular permission definitions bound to roles and sidebar menus"
+          data={permissionsCatalog}
+          columns={permColumns}
+          rowKey={(p) => p.id}
+          actions={permActions}
+          pageSize={25}
+          exportFileName="omniclaim-permissions"
+          searchPlaceholder="Search permission slug, module, action..."
+        />
       </div>
     </div>
   );

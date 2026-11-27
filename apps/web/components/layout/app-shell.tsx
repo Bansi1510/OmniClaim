@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {(isSystemAdmin || isMasterLogin || bypassAllPermissions) && (
+            {(isSystemAdmin || bypassAllPermissions) && (
               <Link
                 href="/super-admin"
                 className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-400 hover:bg-amber-500/25 transition"
@@ -145,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="hidden xl:flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs">
               <span className={`h-2 w-2 rounded-full animate-pulse ${isBackendConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               <span className="font-mono font-semibold text-foreground">
-                @{username} · {isBackendConnected ? 'Live DB' : 'Local'}
+                @{username} · {activeRole} · {isBackendConnected ? 'Live DB' : 'Local'}
               </span>
             </div>
 
